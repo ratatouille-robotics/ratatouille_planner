@@ -65,6 +65,8 @@ class Ratatouille:
             self.known_poses = yaml.safe_load(_temp)
         self.pose_transformer = PoseTransforms()
 
+        self.log(self.known_poses)
+
         # initialize state variables
         self.state = state
 
@@ -86,17 +88,20 @@ class Ratatouille:
             for index, ingredient in enumerate(
                 self.known_poses["cartesian"]["ingredients"]
             ):
-                print(f"{index + 1}: {ingredient}")
+                print(f"{index + 1}: {ingredient['name']}")
             print("-" * 80)
             _raw_input_ingredient_id = input("Enter ingredient number: ")
             _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
 
             # validate user input
             try:
-                self.target_ingredient_id = -1 + int(
-                    _raw_input_ingredient_id
-                )  # to account for zero indexing
+                self.target_ingredient_id = int(_raw_input_ingredient_id)
                 self.target_quantity = int(_raw_input_ingredient_quantity)
+                if self.target_ingredient_id not in [
+                    ingredient["id"]
+                    for ingredient in self.known_poses["cartesian"]["ingredients"]
+                ]:
+                    raise
             except:
                 self.logerr(
                     "Unable to parse user input. Please enter valid ingredient ID and quantity."
@@ -116,13 +121,13 @@ class Ratatouille:
 
         return
 
-    def __robot_open_gripper(self, args):
+    def __robot_open_gripper(self, wait):
         if not self.disable_gripper:
-            self.robot_mg.open_gripper(args)
+            self.robot_mg.open_gripper(wait=wait)
 
-    def __robot_go_to_joint_state(self, args):
+    def __robot_go_to_joint_state(self, pose):
         if not self.debug_mode:
-            self.robot_mg.go_to_joint_state(args)
+            self.robot_mg.go_to_joint_state(pose)
 
     def log(self, msg):
         if self.verbose:
