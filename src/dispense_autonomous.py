@@ -38,6 +38,8 @@ class Ratatouille:
     # state variables
     state = None
     error_message = None
+    target_ingredient_id = None
+    target_quantity = None  # in grams
 
     def __init__(
         self,
@@ -69,7 +71,7 @@ class Ratatouille:
 
     def run(self) -> None:
         self.log("\n" + "-" * 80)
-        self.log(f"Executing state: {self.state}")
+        self.log(f" {self.state} ".center(80))
         self.log("-" * 80)
 
         if self.state == RatatouilleStates.COLD_START:
@@ -77,15 +79,24 @@ class Ratatouille:
             if not self.disable_gripper:
                 self.robot_mg.open_gripper()
             self.log(f"Moving to joint pose: {self.known_poses['joint']['home']}")
-            self.robot_go_to_joint_state(self.known_poses["joint"]["home"])
+            self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
+
             self.state = RatatouilleStates.WAIT_INPUT
 
         elif self.state == RatatouilleStates.WAIT_INPUT:
-            print("Enter input ingredient number. Options are:")
+            print(" INGREDIENTS: ".center(80, "-"))
             for index, ingredient in enumerate(
                 self.known_poses["cartesian"]["ingredients"]
             ):
-                print(index + 1, ingredient)
+                print(f"{index + 1}: {ingredient}")
+            print("-" * 80)
+            _raw_input_ingredient_id = = input("Enter ingredient number: ")
+            _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
+            # TODO: validate user input type and value
+            self.target_ingredient_id = -1 + int(_raw_input_ingredient_id)  # to account for zero indexing
+            self.target_quantity = int(_raw_input_ingredient_quantity)
+
+            self.state == RatatouilleStates.SEARCH_MARKER
 
         elif self.state == RatatouilleStates.MOVING:
             raise NotImplementedError
@@ -101,9 +112,8 @@ class Ratatouille:
             self.state = RatatouilleStates.WAIT_INPUT
 
         self.log(f"\nNext state: {self.state}")
-        self.log("-" * 80)
 
-    def robot_go_to_joint_state(self, args):
+    def __robot_go_to_joint_state(self, args):
         if not self.debug_mode:
             self.robot_mg.go_to_joint_state(args)
 
