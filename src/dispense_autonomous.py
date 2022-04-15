@@ -13,6 +13,7 @@ from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
 from motion.utils import make_pose, offset_pose
 from dispense.dispense import Dispenser
+from sensor_interface.msg import UserInput
 
 
 _ROS_RATE = 10.0
@@ -35,11 +36,13 @@ class Ratatouille:
     disable_gripper = None
     verbose = None
     stop_and_proceed = None
+    disable_external_input = None
 
     # dependencies
     robot_mg = None
     known_poses = None
     pose_transformer = None
+    sensordata = None
 
     # state variables
     state = None
@@ -55,12 +58,14 @@ class Ratatouille:
         verbose: bool = False,
         stop_and_proceed: bool = False,
         debug_mode: bool = False,
+        disable_external_input: bool = False,
     ) -> None:
         # initialize flags
         self.debug_mode = debug_mode
         self.disable_gripper = disable_gripper
         self.verbose = verbose
         self.stop_and_proceed = stop_and_proceed
+        self.disable_external_input = disable_external_input
 
         # initialize dependencies
         if not self.debug_mode:
@@ -120,29 +125,37 @@ class Ratatouille:
                     self.state = RatatouilleStates.REPLACE_CONTAINER
 
         elif self.state == RatatouilleStates.AWAIT_USER_INPUT:
-            print(" INGREDIENTS: ".center(80, "-"))
-            for index, ingredient in enumerate(
-                self.known_poses["cartesian"]["ingredients"]
-            ):
-                print(f"{index + 1}: {ingredient['name']}")
-            print("-" * 80)
-            _raw_input_ingredient_id = input("Enter ingredient number: ")
-            _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
-
-            # validate user input
-            try:
-                self.target_quantity = int(_raw_input_ingredient_quantity)
-                self.target_ingredient = list(
-                    filter(
-                        lambda x: x["id"] == int(_raw_input_ingredient_id),
-                        self.known_poses["cartesian"]["ingredients"],
-                    )
-                )[0]
-            except:
-                self.log_error_and_reset(
-                    "Unable to parse user input. Please enter valid ingredient ID and quantity."
+            if not self.disable_external_input:
+                self.log("Waiting for user input from the input board")
+                user_request: UserInput = rospy.wait_for_message(
+                    "/user_input", UserInput, timeout=None
                 )
-                return
+                self.target_ingredient = user_request.ingredient
+                self.target_quantity = user_request.quantity
+            else:
+                print(" INGREDIENTS: ".center(80, "-"))
+                for index, ingredient in enumerate(
+                    self.known_poses["cartesian"]["ingredients"]
+                ):
+                    print(f"{index + 1}: {ingredient['name']}")
+                print("-" * 80)
+                _raw_input_ingredient_id = input("Enter ingredient number: ")
+                _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
+
+                # validate user input
+                try:
+                    self.target_quantity = int(_raw_input_ingredient_quantity)
+                    self.target_ingredient = list(
+                        filter(
+                            lambda x: x["id"] == int(_raw_input_ingredient_id),
+                            self.known_poses["cartesian"]["ingredients"],
+                        )
+                    )[0]
+                except:
+                    self.log_error_and_reset(
+                        "Unable to parse user input. Please enter valid ingredient ID and quantity."
+                    )
+                    return
 
             self.state = RatatouilleStates.SEARCH_MARKER
 
@@ -364,6 +377,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--disable-gripper", help="Disable gripper commands", action="store_true"
     )
+    parser.add_argument(
+        "--disable-external-input", help="Disable user input board", action="store_true"
+    )
     parser.add_argument("--verbose", help="Enable verbose output", action="store_true")
     parser.add_argument(
         "--stop-and-proceed",
@@ -372,9 +388,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # disable gripper motion and verbose output if running in debug mode
+    # Set additional options for running in debug mode
     if args.debug:
         args.disable_gripper = True
+        args.disable_external_input = True
         args.verbose = True
 
     if args.config_dir is None:
@@ -390,6 +407,7 @@ if __name__ == "__main__":
         verbose=args.verbose,
         stop_and_proceed=args.stop_and_proceed,
         debug_mode=args.debug,
+        disable_external_input=args.disable_external_input,
     )
 
     # run state machine while ROS is running
