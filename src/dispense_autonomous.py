@@ -5,6 +5,7 @@ import rospkg
 import argparse
 import yaml
 import os
+import time
 from enum import Enum, auto
 from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
@@ -15,12 +16,11 @@ _ROS_NODE_NAME = "ratatouille_planner"
 
 
 class RatatouilleStates(Enum):
-    COLD_START = auto()
-    WAIT_INPUT = auto()
+    HOME = auto()
+    AWAIT_USER_INPUT = auto()
     MOVING = auto()
     SEARCH_MARKER = auto()
     DISPENSING = auto()
-    ERROR = auto()
 
 
 class Ratatouille:
@@ -37,7 +37,6 @@ class Ratatouille:
 
     # state variables
     state = None
-    error_message = None
     target_ingredient_id = None
     target_quantity = None  # in grams
 
@@ -74,29 +73,37 @@ class Ratatouille:
         self.log(f" {self.state} ".center(80))
         self.log("-" * 80)
 
-        if self.state == RatatouilleStates.COLD_START:
+        if self.state == RatatouilleStates.HOME:
             self.log(f"Opening gripper")
-            if not self.disable_gripper:
-                self.robot_mg.open_gripper()
-            self.log(f"Moving to joint pose: {self.known_poses['joint']['home']}")
+            self.__robot_open_gripper(wait=True)
+            self.log(f"Moving to HOME pose")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
-            self.state = RatatouilleStates.WAIT_INPUT
+            self.state = RatatouilleStates.AWAIT_USER_INPUT
 
-        elif self.state == RatatouilleStates.WAIT_INPUT:
+        elif self.state == RatatouilleStates.AWAIT_USER_INPUT:
             print(" INGREDIENTS: ".center(80, "-"))
             for index, ingredient in enumerate(
                 self.known_poses["cartesian"]["ingredients"]
             ):
                 print(f"{index + 1}: {ingredient}")
             print("-" * 80)
-            _raw_input_ingredient_id = = input("Enter ingredient number: ")
+            _raw_input_ingredient_id = input("Enter ingredient number: ")
             _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
-            # TODO: validate user input type and value
-            self.target_ingredient_id = -1 + int(_raw_input_ingredient_id)  # to account for zero indexing
-            self.target_quantity = int(_raw_input_ingredient_quantity)
 
-            self.state == RatatouilleStates.SEARCH_MARKER
+            # validate user input
+            try:
+                self.target_ingredient_id = -1 + int(
+                    _raw_input_ingredient_id
+                )  # to account for zero indexing
+                self.target_quantity = int(_raw_input_ingredient_quantity)
+            except:
+                self.logerr(
+                    "Unable to parse user input. Please enter valid ingredient ID and quantity."
+                )
+                return
+
+            self.state = RatatouilleStates.SEARCH_MARKER
 
         elif self.state == RatatouilleStates.MOVING:
             raise NotImplementedError
@@ -107,11 +114,11 @@ class Ratatouille:
         elif self.state == RatatouilleStates.DISPENSING:
             raise NotImplementedError
 
-        elif self.state == RatatouilleStates.ERROR:
-            print(self.error_message)
-            self.state = RatatouilleStates.WAIT_INPUT
+        return
 
-        self.log(f"\nNext state: {self.state}")
+    def __robot_open_gripper(self, args):
+        if not self.disable_gripper:
+            self.robot_mg.open_gripper(args)
 
     def __robot_go_to_joint_state(self, args):
         if not self.debug_mode:
@@ -122,6 +129,12 @@ class Ratatouille:
             print(msg)
         if self.stop_and_proceed:
             input()
+
+    def logerr(self, error_message):
+        rospy.logerr(error_message)
+        rospy.logwarn("Press any key to reset.")
+        input()
+        self.state = RatatouilleStates.HOME
 
 
 if __name__ == "__main__":
@@ -158,7 +171,7 @@ if __name__ == "__main__":
 
     # initialize state machine
     ratatouille = Ratatouille(
-        RatatouilleStates.COLD_START,
+        RatatouilleStates.HOME,
         disable_gripper=args.disable_gripper,
         pose_file_path=args.pose_file,
         verbose=args.verbose,
