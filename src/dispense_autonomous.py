@@ -220,12 +220,15 @@ class Ratatouille:
             pose_marker_base_frame.pose.orientation.w = _temp_quaternion[3]
 
             # Move to container position
+            self.log("Moving to pick container to container position")
             self.__robot_go_to_pose_goal(pose=pose_marker_base_frame.pose)
 
             # Grip the container
+            self.log("Closing the gripper")
             self.__robot_close_gripper(wait=True)
 
             # Move to actual/true ingredient position
+            self.log("Moving to true ingredient position")
             pose = make_pose(
                 [
                     self.target_ingredient["pose"][0],
@@ -237,6 +240,7 @@ class Ratatouille:
             self.__robot_go_to_pose_goal(pose=pose)
 
             # go back out of shelf
+            self.log("Backing out of the shelf")
             self.__robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), [0.00, 0.20, 0.00])
             )
@@ -245,9 +249,13 @@ class Ratatouille:
 
         elif self.state == RatatouilleStates.DISPENSING:
             # Move to pre-dispense position
+            self.log("Moving to pre-dispense position")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
 
             # Move to dispense position
+            self.log(
+                f"Moving to dispensing position for ingredient [{self.target_ingredient['name']}]"
+            )
             dispensing_params = self.pouring_characteristics[
                 self.target_ingredient["name"]
             ]
@@ -257,12 +265,14 @@ class Ratatouille:
             self.__robot_go_to_pose_goal(make_pose(pos, orient))
 
             # Dispense ingredient
+            self.log("Dispensing ingredient")
             dispenser = Dispenser(self.robot_mg)
             dispenser.dispense_ingredient(
                 dispensing_params, float(self.target_quantity)
             )
 
-            # Move to predispense position
+            # Move to pre-dispense position
+            self.log("Moving to pre-dispense position")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
 
             self.dispensing_complete = True
@@ -271,6 +281,9 @@ class Ratatouille:
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
 
             # Move to ingredient view position
+            self.log(
+                f"Moving to view position for ingredient: {self.target_ingredient['name']}"
+            )
             self.__robot_go_to_pose_goal(
                 make_pose(
                     self.target_ingredient["pose"][:3],
@@ -279,19 +292,23 @@ class Ratatouille:
             )
 
             # Move up a little to prevent container hitting the shelf
+            self.log("Moving up to avoid hitting shelf while replacing container")
             self.__robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), [0, 0, 0.075])
             )
 
             # Move to ingredient position
+            self.log("Moving to replace container at ingredient position")
             self.__robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), [0, -0.2, -0.05])
             )
 
             # Release gripper
+            self.log("Opening gripper")
             self.__robot_open_gripper()
 
             # Move back out of the shelf
+            self.log("Backing out of the shelf")
             self.__robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), [0, 0.20, 0.05])
             )
