@@ -2,7 +2,7 @@
 <package format="2">
   <name>ratatouille_planner</name>
   <version>0.0.0</version>
-  <description>The ratatouille_planner package</description>
+  <description>High-level planner for the Ratatouille ingredient dispensing system.</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -52,12 +52,28 @@
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
+  <build_depend>ur_motion</build_depend>
+  <build_depend>ratatouille_pose_estimation</build_depend>
+  <build_depend>dispense</build_depend>
+  <build_depend>sensor_interface</build_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
+  <build_export_depend>ur_motion</build_export_depend>
+  <build_export_depend>ratatouille_pose_estimation</build_export_depend>
+  <build_export_depend>dispense</build_export_depend>
+  <build_export_depend>sensor_interface</build_export_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>ur_motion</exec_depend>
+  <exec_depend>ratatouille_pose_estimation</exec_depend>
+  <exec_depend>dispense</exec_depend>
+  <exec_depend>sensor_interface</exec_depend>
+  <exec_depend>ur5e_moveit_config</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>ar_track_alvar</exec_depend>
+  <exec_depend>robotiq_urcap_control</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
