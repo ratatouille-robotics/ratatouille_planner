@@ -6,27 +6,68 @@ ROS package that handles high-level planning for the Ratatouille ingredient disp
 
 ```mermaid
 stateDiagram-v2
-    [*] --> RESET
-    RESET --> HOME: Open gripper
-    state ingredient_selected <<choice>>
-    HOME --> ingredient_selected: Is Request Pending?
-    ingredient_selected --> AWAIT_USER_INPUT: False
-    state dispensing_complete <<choice>>
-    ingredient_selected --> dispensing_complete: True\n Is dispensing \n complete?
-    dispensing_complete --> DISPENSING: False
-    dispensing_complete --> REPLACE_CONTAINER: True
-    AWAIT_USER_INPUT --> SEARCH_MARKER: Dispensing \n request \n received
-    SEARCH_MARKER --> PICK_CONTAINER: Ingredient \n container \n found
-    PICK_CONTAINER --> HOME: Pick \n ingredient \n container
-    DISPENSING --> HOME: Ingredient \n dispensed
-    REPLACE_CONTAINER --> HOME: Container replaced \n on shelf
+    [*] --> HOME
 
-    AWAIT_USER_INPUT --> ERROR: Invalid \n dispensing \n request
-    SEARCH_MARKER --> ERROR: Cannot find marker
-    PICK_CONTAINER --> ERROR: Unable to \n pick container
-    DISPENSING --> ERROR: Unable to dispense
-    REPLACE_CONTAINER --> ERROR: Unable to replace \n container on shelf
-    ERROR --> RESET: Log error and \n prompt user
+    state has_container <<choice>>
+    state has_request1 <<choice>>
+    state has_request2 <<choice>>
+
+    HOME --> has_container: Has container?
+
+    has_container --> has_request1: False \n Has Request?
+    has_request1 --> AWAIT_USER_INPUT: False
+    has_request1 --> SEARCH_MARKER: True
+    has_container --> has_request2: True \n Has Request?
+    has_request2 --> CHECK_QUANTITY: True
+    has_request2 --> REPLACE_CONTAINER: False
+
+    AWAIT_USER_INPUT --> HOME: has_request = True
+
+    SEARCH_MARKER --> VERIFY_INGREDIENT
+    VERIFY_INGREDIENT --> PICK_CONTAINER
+    PICK_CONTAINER --> HOME: has_container = True
+
+    REPLACE_CONTAINER --> HOME: has_container = False
+
+    CHECK_QUANTITY --> DISPENSE
+    DISPENSE --> HOME: has_request = False
+
+    LOG_ERROR --> HOME: Reset error \n has_request = False
+
+    AWAIT_USER_INPUT --> LOG_ERROR: has_error = True
+    SEARCH_MARKER --> LOG_ERROR: has_error = True
+    VERIFY_INGREDIENT --> LOG_ERROR: has_error = True
+    PICK_CONTAINER --> LOG_ERROR: has_error = True
+    CHECK_QUANTITY --> LOG_ERROR: has_error = True
+    DISPENSE --> LOG_ERROR: has_error = True
+    REPLACE_CONTAINER --> LOG_ERROR: has_error = True
+
+```
+
+## Flowchart
+```mermaid
+flowchart
+  GH[Go Home] --> HE{has_error?}
+  HE --> |True| LE[Log error]
+  LE --> |set has_error = False| GH
+
+  HE --> |False| HC{has_container?}
+  HC --> |False| HR1{has_request?}
+  HR1 --> |False| AWAIT_USER_INPUT[Read User Input]
+  AWAIT_USER_INPUT --> |Set has_request = True| GH
+
+  HR1 --> |True| SEARCH_MARKER[Go to ingredient position & search for container]
+  SEARCH_MARKER --> PICK_CONTAINER[Correct pose & pick container]
+  PICK_CONTAINER --> |Set has_container = True| GH
+
+  HC --> |True| HR2{has_request?}
+
+  HR2 --> |True| DISPENSE[Dispense ingredient]
+  DISPENSE --> |Set has_request = False| GH
+
+  HR2 --> |False| REPLACE_CONTAINER[Replace container on shelf]
+  REPLACE_CONTAINER --> |Set has_container = False| GH
+
 ```
 
 ## Dependencies
@@ -48,7 +89,7 @@ stateDiagram-v2
 
 ```
 roslaunch ratatouille_planner dispense_autonomous.py [-h] [--debug] [--config-dir CONFIG_DIR] [--disable-gripper]
-                              [--disable-external-input] [--verbose] [--stop-and-proceed]
+                            [--disable-external-input] [--verbose] [--stop-and-proceed]
 
 optional arguments:
   -h, --help            show this help message and exit
