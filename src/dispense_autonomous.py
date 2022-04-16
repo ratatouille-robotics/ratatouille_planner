@@ -8,6 +8,8 @@ import os
 from enum import Enum, auto
 from tf.transformations import *
 from geometry_msgs.msg import Pose
+from std_msgs.msg import Float64, String
+from typing import List
 
 from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
@@ -20,14 +22,45 @@ _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
 
 
+class Container:
+    ingredient_id: int = None
+    ingredient_name: str = None
+
+    def __init__(self, ingredient_id, ingredient_name) -> None:
+        self.ingredient_name = ingredient_name
+        self.id = ingredient_id
+
+
+class DispensingRequest:
+    ingredient_id: int = None
+    ingredient_name: str = None
+    container_pose: List[float] = None
+    quantity: float = None
+
+    def __init__(
+        self,
+        ingredient_id: int,
+        ingredient_name: str,
+        quantity: float,
+        container_pose: List[float],
+    ) -> None:
+        self.ingredient_id = ingredient_id
+        self.ingredient_name = ingredient_name
+        self.quantity = quantity
+        self.container_pose = container_pose
+
+
 class RatatouilleStates(Enum):
-    RESET = auto()
+    # RESET = auto()
     HOME = auto()
     AWAIT_USER_INPUT = auto()
     SEARCH_MARKER = auto()
-    DISPENSING = auto()
+    VERIFY_INGREDIENT = auto()
     PICK_CONTAINER = auto()
+    CHECK_QUANTITY = auto()
+    DISPENSE = auto()
     REPLACE_CONTAINER = auto()
+    LOG_ERROR = auto()
 
 
 class Ratatouille:
@@ -45,10 +78,10 @@ class Ratatouille:
     sensordata = None
 
     # state variables
-    state = None
-    target_ingredient = None
-    target_quantity = None  # in grams
-    dispensing_complete = None
+    state: RatatouilleStates = None
+    request: DispensingRequest = None
+    container: Container = None
+    error_message: str = None
 
     def __init__(
         self,
@@ -88,51 +121,57 @@ class Ratatouille:
 
         self.pose_transformer = PoseTransforms()
 
-        self.log(self.known_poses)
-
         # initialize state variables
         self.state = state
-        self.dispensing_complete = False
+        self.container = None
+        self.request = None
+        self.error_message = None
 
     def run(self) -> None:
         self.log("\n" + "-" * 80)
         self.log(f" {self.state} ".center(80))
         self.log("-" * 80)
 
-        if self.state == RatatouilleStates.RESET:
-            # reset state variables
-            self.target_ingredient = None
-            self.target_quantity = None
-            self.dispensing_complete = False
-
-            # open gripper and go to HOME position
-            self.log(f"Opening gripper")
-            self.__robot_open_gripper(wait=True)
-            self.state = RatatouilleStates.HOME
-
-        elif self.state == RatatouilleStates.HOME:
-            self.log(f"Moving to HOME pose")
+        if self.state == RatatouilleStates.HOME:
+            self.log(f"Moving to home")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
-            if self.target_ingredient is None or self.target_quantity is None:
-                assert self.target_ingredient is None
-                assert self.target_quantity is None
-                self.state = RatatouilleStates.AWAIT_USER_INPUT
-            else:
-                if not self.dispensing_complete:
-                    self.state = RatatouilleStates.DISPENSING
+            if self.container is None:
+                if self.request is None:
+                    self.state = RatatouilleStates.AWAIT_USER_INPUT
                 else:
+                    self.state = RatatouilleStates.SEARCH_MARKER
+            else:
+                if self.request is None:
                     self.state = RatatouilleStates.REPLACE_CONTAINER
+                else:
+                    self.state = RatatouilleStates.CHECK_QUANTITY
 
         elif self.state == RatatouilleStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
                 self.log("Waiting for user input from the input board")
                 user_request: UserInput = rospy.wait_for_message(
-                    "/user_input", UserInput, timeout=None
+                    "user_input", UserInput, timeout=None
                 )
-                self.target_ingredient = user_request.ingredient
-                self.target_quantity = user_request.quantity
+
+                try:
+                    # check if ingredient in list
+                    ingredient = ingredient_name = list(
+                        filter(
+                            lambda x: x["name"] == user_request.ingredient,
+                            self.known_poses["cartesian"]["ingredients"],
+                        )
+                    )[0]
+                    self.request = DispensingRequest(
+                        ingredient_id=ingredient["id"],
+                        ingredient_name=ingredient["name"],
+                        container_pose=ingredient["pose"],
+                        quantity=float(user_request.quantity),
+                    )
+                except:
+                    self.error_message = "Invalid user input."
             else:
+                # print menu and read input from command line
                 print(" INGREDIENTS: ".center(80, "-"))
                 for index, ingredient in enumerate(
                     self.known_poses["cartesian"]["ingredients"]
@@ -144,30 +183,35 @@ class Ratatouille:
 
                 # validate user input
                 try:
-                    self.target_quantity = int(_raw_input_ingredient_quantity)
-                    self.target_ingredient = list(
+                    ingredient = list(
                         filter(
                             lambda x: x["id"] == int(_raw_input_ingredient_id),
                             self.known_poses["cartesian"]["ingredients"],
                         )
                     )[0]
-                except:
-                    self.log_error_and_reset(
-                        "Unable to parse user input. Please enter valid ingredient ID and quantity."
+                    self.request = DispensingRequest(
+                        ingredient_id=ingredient["id"],
+                        ingredient_name=ingredient["name"],
+                        container_pose=ingredient["pose"],
+                        quantity=float(_raw_input_ingredient_quantity),
                     )
-                    return
+                except:
+                    self.error_message = "Unable to parse user input."
 
-            self.state = RatatouilleStates.SEARCH_MARKER
+            if self.error_message is None:
+                self.state = RatatouilleStates.HOME
+            else:
+                self.state = RatatouilleStates.LOG_ERROR
 
         elif self.state == RatatouilleStates.SEARCH_MARKER:
             # Move to ingredient view position
             self.log(
-                f"Moving to ingredient view position: {self.target_ingredient['name']}"
+                f"Moving to ingredient view position: {self.request.ingredient_name}"
             )
             self.__robot_go_to_pose_goal(
                 pose=make_pose(
-                    self.target_ingredient["pose"][:3],
-                    self.target_ingredient["pose"][3:],
+                    self.request.container_pose[:3],
+                    self.request.container_pose[3:],
                 )
             )
 
@@ -187,16 +231,30 @@ class Ratatouille:
 
             target_pose = self.pose_transformer.transform_pose_to_frame(
                 pose_source=marker_origin,
-                header_frame_id="pregrasp_" + str(self.target_ingredient["id"]),
+                header_frame_id="pregrasp_" + str(self.request.ingredient_id),
                 base_frame_id="base_link",
             )
             if target_pose is None:
-                self.log_error_and_reset(f"Unable to find ingredient marker.")
-            self.state = RatatouilleStates.PICK_CONTAINER
+                self.error_message = f"Unable to find ingredient marker."
+
+            if self.error_message is None:
+                self.state = RatatouilleStates.VERIFY_INGREDIENT
+            else:
+                self.state = RatatouilleStates.LOG_ERROR
+
+        elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
+            detected_ingredient: String = rospy.wait_for_message(
+                "detected_ingredient", String, timeout=None
+            )
+
+            # mark dispensing complete to replace container in shelf
+            if self.request.ingredient_name != detected_ingredient:
+                self.state = RatatouilleStates.LOG_ERROR
+            else:
+                self.state = RatatouilleStates.PICK_CONTAINER
 
         elif self.state == RatatouilleStates.PICK_CONTAINER:
             # Move to pregrasp position
-
             self.log("Moving to pregrasp position")
             self.__robot_go_to_pose_goal(pose=target_pose.pose)
 
@@ -258,9 +316,23 @@ class Ratatouille:
                 offset_pose(self.robot_mg.get_current_pose(), [0.00, 0.20, 0.00])
             )
 
+            self.container = Container(
+                name=self.request.ingredient_name, id=self.request.ingredient_id
+            )
             self.state = RatatouilleStates.HOME
 
-        elif self.state == RatatouilleStates.DISPENSING:
+        elif self.state == RatatouilleStates.CHECK_QUANTITY:
+            weight_ft: Float64 = rospy.wait_for_message(
+                "force_torque_weight", Float64, timeout=None
+            )
+
+            # mark dispensing complete to replace container in shelf
+            if weight_ft < self.request.quantity:
+                self.state = RatatouilleStates.DISPENSE
+            else:
+                self.state = RatatouilleStates.HOME
+
+        elif self.state == RatatouilleStates.DISPENSE:
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
@@ -288,7 +360,8 @@ class Ratatouille:
             self.log("Moving to pre-dispense position")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
 
-            self.dispensing_complete = True
+            # Remove completed dispense requests
+            self.request = None
             self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
@@ -320,12 +393,24 @@ class Ratatouille:
             self.log("Opening gripper")
             self.__robot_open_gripper()
 
+            # Remove container once replaced
+            self.container = None
+
             # Move back out of the shelf
             self.log("Backing out of the shelf")
             self.__robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), [0, 0.20, 0.05])
             )
 
+            self.state = RatatouilleStates.HOME
+
+        elif self.state == RatatouilleStates.LOG_ERROR:
+            rospy.logerr(self.error_message)
+            rospy.logwarn("Press any key to reset.")
+            input()
+            # reset user request after error
+            self.error_message = None
+            self.request = None
             self.state = RatatouilleStates.HOME
 
         return
@@ -355,12 +440,6 @@ class Ratatouille:
             print(msg)
         if self.stop_and_proceed:
             input()
-
-    def log_error_and_reset(self, error_message):
-        rospy.logerr(error_message)
-        rospy.logwarn("Press any key to reset.")
-        input()
-        self.state = RatatouilleStates.RESET
 
 
 if __name__ == "__main__":
@@ -401,7 +480,7 @@ if __name__ == "__main__":
 
     # initialize state machine
     ratatouille = Ratatouille(
-        RatatouilleStates.RESET,
+        RatatouilleStates.HOME,
         disable_gripper=args.disable_gripper,
         config_dir_path=args.config_dir,
         verbose=args.verbose,
