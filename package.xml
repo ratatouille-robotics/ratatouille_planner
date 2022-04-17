@@ -52,20 +52,25 @@
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>std_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
   <build_depend>ur_motion</build_depend>
   <build_depend>ratatouille_pose_estimation</build_depend>
   <build_depend>dispense</build_depend>
   <build_depend>sensor_interface</build_depend>
+  <build_depend>tf2_ros</build_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
+  <build_export_depend>geometry_msgs</build_export_depend>
   <build_export_depend>ur_motion</build_export_depend>
   <build_export_depend>ratatouille_pose_estimation</build_export_depend>
   <build_export_depend>dispense</build_export_depend>
   <build_export_depend>sensor_interface</build_export_depend>
+  <build_export_depend>tf2_ros</build_export_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>ur_motion</exec_depend>
   <exec_depend>ratatouille_pose_estimation</exec_depend>
   <exec_depend>dispense</exec_depend>
@@ -74,6 +79,7 @@
   <exec_depend>realsense2_camera</exec_depend>
   <exec_depend>ar_track_alvar</exec_depend>
   <exec_depend>robotiq_urcap_control</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
