@@ -43,7 +43,7 @@
   <node pkg="ratatouille_pose_estimation" type="publish_marker_poses.py" name="ratatouille_pose_estimation"></node>
 
   <!-- Ingredient identification -->
-  <!-- <node pkg="ingredient_validation" type="validate_ingredient.py" name="ingredient_validation"></node> -->
+  <node pkg="ingredient_validation" type="validate_ingredient.py" name="ingredient_validation"></node>
 
 
 </launch>
