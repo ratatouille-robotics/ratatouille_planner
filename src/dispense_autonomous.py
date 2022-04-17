@@ -244,10 +244,11 @@ class Ratatouille:
                 pose=make_pose(
                     self.request.container_expected_pose[:3],
                     self.request.container_expected_pose[3:],
-                )
+                ),
+                acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # Compute pregrasp position
@@ -296,13 +297,11 @@ class Ratatouille:
 
             # Move to pregrasp position
             self.log("Moving to pregrasp position")
-            # _pose = make_pose(
-            #     self.request.container_actual_pose[:3],
-            #     self.request.container_actual_pose[3:],
-            # )
-            if not self.__robot_go_to_pose_goal(pose=self.container_actual_pose.pose):
+            if not self.__robot_go_to_pose_goal(
+                pose=self.container_actual_pose.pose, acc_scaling=0.1
+            ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             #  Compute container position
@@ -328,9 +327,11 @@ class Ratatouille:
 
             # Move to container position
             self.log("Moving to pick container from actual container position")
-            if not self.__robot_go_to_pose_goal(pose=pose_marker_base_frame.pose):
+            if not self.__robot_go_to_pose_goal(
+                pose=pose_marker_base_frame.pose, acc_scaling=0.1
+            ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # Grip the container
@@ -349,16 +350,17 @@ class Ratatouille:
             )
             if not self.__robot_go_to_pose_goal(pose=pose):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # go back out of shelf
             self.log("Backing out of the shelf")
             if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), [0.00, 0.20, 0.00])
+                offset_pose(self.robot_mg.get_current_pose(), [0.00, 0.20, 0.00]),
+                acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             self.container = Container(
@@ -398,9 +400,13 @@ class Ratatouille:
             _temp = self.known_poses["cartesian"]["pouring"][
                 dispensing_params["container"]
             ][dispensing_params["pouring_position"]]
-            if not self.__robot_go_to_pose_goal(make_pose(_temp[:3], _temp[3:])):
+            if not self.__robot_go_to_pose_goal(
+                make_pose(_temp[:3], _temp[3:]),
+                orient_tolerance=0.05,
+                velocity_scaling=0.15,
+            ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # Dispense ingredient
@@ -432,19 +438,21 @@ class Ratatouille:
                 make_pose(
                     self.container.container_expected_pose[:3],
                     self.container.container_expected_pose[3:],
-                )
+                ),
+                acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # Move up a little to prevent container hitting the shelf
             self.log("Moving up to avoid hitting shelf while replacing container")
             if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), [0, 0, 0.075])
+                offset_pose(self.robot_mg.get_current_pose(), [0, 0, 0.075]),
+                acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # Move to ingredient position
@@ -453,7 +461,7 @@ class Ratatouille:
                 offset_pose(self.robot_mg.get_current_pose(), [0, -0.2, -0.055])
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             # Release gripper
@@ -466,10 +474,11 @@ class Ratatouille:
             # Move back out of the shelf
             self.log("Backing out of the shelf")
             if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), [0, 0.20, 0.05])
+                offset_pose(self.robot_mg.get_current_pose(), [0, 0.20, 0.05]),
+                acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state == RatatouilleStates.LOG_ERROR
+                self.state = RatatouilleStates.LOG_ERROR
                 return
 
             self.state = RatatouilleStates.HOME
@@ -497,12 +506,15 @@ class Ratatouille:
         if not self.debug_mode:
             return self.robot_mg.go_to_joint_state(pose)
 
-    def __robot_go_to_pose_goal(self, pose):
+    def __robot_go_to_pose_goal(
+        self, pose, acc_scaling=0.2, velocity_scaling=0.2, orient_tolerance=0.01
+    ):
         if not self.debug_mode:
             return self.robot_mg.go_to_pose_goal(
                 pose,
-                cartesian_path=True,
-                acc_scaling=0.1,
+                acc_scaling=acc_scaling,
+                velocity_scaling=velocity_scaling,
+                orient_tolerance=orient_tolerance,
             )
 
     def __correct_gripper_angle_tilt(self, pose_marker_base_frame: Pose):
