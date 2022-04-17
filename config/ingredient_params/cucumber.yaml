@@ -1,16 +1,18 @@
-tolerance: 15.0
+name: cucumber
+tolerance: 25.0
 container: regular
 pouring_position: edge
 controller:
   type: pd
-  morphology:
+  morphology: 
   p_gain: 0.0025
-  d_gain: 0.01
-  max_acc_scaling: 1
-  max_vel_scaling: 0.5
+  d_gain: 0.02
+  acc_scaling: 2
+  vel_scaling: 0.5
   rot_axis: [1, 0, 0]
   shaking: True
-  shake_params:
-    axis: [0, 1, 0]
-    amplitude: 0.005
-    frequency: 2
+  rot_shake_params:
+    axis: [0, 0, 1]
+    amplitude: 0.05
+    frequency: 5
+    pattern: [1]

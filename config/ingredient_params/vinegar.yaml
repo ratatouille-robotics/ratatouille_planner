@@ -1,12 +1,13 @@
+name: vinegar
 tolerance: 5.0
 container: liquid
 pouring_position: corner
 controller:
   type: pd
-  morphology:
-  p_gain: 0.0025
-  d_gain: 0.01
-  max_acc_scaling: 1
-  max_vel_scaling: 3
+  morphology: 
+  p_gain: 0.012
+  d_gain: 0.06
+  acc_scaling: 1.5
+  vel_scaling: 3
   rot_axis: [0.7071, 0, -0.7071]
   shaking: False

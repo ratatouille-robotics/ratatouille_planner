@@ -1,17 +1,18 @@
+name: peanuts
 tolerance: 10.0
 container: regular
 pouring_position: corner
 controller:
   type: pd
-  morphology:
+  morphology: 
   p_gain: 0.0025
-  d_gain: 0.01
-  max_acc_scaling: 1
-  max_vel_scaling: 1
+  d_gain: 0.02
+  acc_scaling: 1
+  vel_scaling: 1
   rot_axis: [0.7071, 0, -0.7071]
   shaking: True
-  shake_params:
+  trans_shake_params:
     axis: [1, 0, 0]
-    amplitude: 0.01
-    frequency: 2
+    amplitude: 0.0075
+    frequency: 2.5
     pattern: [1]
