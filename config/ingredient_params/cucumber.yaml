@@ -8,7 +8,7 @@ controller:
   p_gain: 0.0025
   d_gain: 0.02
   acc_scaling: 2
-  vel_scaling: 0.5
+  vel_scaling: 1
   rot_axis: [1, 0, 0]
   shaking: True
   # rot_shake_params:
@@ -17,7 +17,7 @@ controller:
   #   frequency: 4
   #   pattern: [1]
   trans_shake_params:
-    axis: [1, 0, 0]
-    amplitude: 0.005
+    axis: [0, 1, 0]
+    amplitude: 0.01
     frequency: 4
-    pattern: [1, 1, 0, 0, 0, 0]
+    pattern: [0, 1, 0, 0, 0, 0]
