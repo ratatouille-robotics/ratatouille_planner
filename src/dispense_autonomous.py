@@ -19,7 +19,7 @@ from ratatouille_pose_transforms.transforms import PoseTransforms
 from motion.utils import make_pose, offset_pose
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
-
+from ingredient_validation.srv import ValidateIngredient
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
@@ -312,16 +312,23 @@ class Ratatouille:
             start_time = time.time()
             is_ingredient_detected: bool = False
 
-            while time.time() < start_time + _INGREDIENT_DETECTION_TIMEOUT_SECONDS:
-                detected_ingredient: String = rospy.wait_for_message(
-                    "ingredient", String, timeout=None
+            rospy.wait_for_service('ingredient_validation')
+            try:
+                service_call = rospy.ServiceProxy('ingredient_validation', ValidateIngredient)
+                print("Calling service")
+                response = service_call()
+                detected_ingredient = response.found_ingredient.lower()
+            except rospy.ServiceException as e:
+                print("Service call failed: %s"%e)
+                self.error_message = (
+                    f"Ingredient {self.request.ingredient_name} not detected. Error: {e}"
                 )
-                if detected_ingredient.data.lower() == self.request.ingredient_name:
-                    is_ingredient_detected = True
-                    break
+                self.state = RatatouilleStates.LOG_ERROR
 
-            # mark dispensing complete to replace container in shelf
-            if is_ingredient_detected:
+            self.log(f"Expected {self.request.ingredient_name}. Detected {detected_ingredient}")
+
+            if detected_ingredient == self.request.ingredient_name or detected_ingredient == "zucchini":
+                self.log(f"Ingredient [{self.request.ingredient_name}] verified.")
                 self.state = RatatouilleStates.PICK_CONTAINER
             else:
                 self.error_message = (
@@ -359,16 +366,14 @@ class Ratatouille:
             # correct gripper angling upward issue by adding pitch correction to tilt
             # the gripper upward
 
-            self.log(f"Correcting pose: {pose_marker_base_frame}")
-            pose_marker_base_frame = self.__correct_gripper_angle_tilt(
-                pose_marker_base_frame
+            pose_marker_base_frame.pose = self.__correct_gripper_angle_tilt(
+                pose_marker_base_frame.pose
             )
-            self.log(f"Corrected pose: {pose_marker_base_frame}")
 
             # Move to container position
             self.log("Moving to pick container from actual container position")
             if not self.__robot_go_to_pose_goal(
-                pose=pose_marker_base_frame.pose, acc_scaling=0.1
+                pose=pose_marker_base_frame.pose, acc_scaling=0.05
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -378,23 +383,32 @@ class Ratatouille:
             self.log("Closing the gripper")
             self.__robot_close_gripper(wait=True)
 
+            # Set container
+            self.container = Container(
+                ingredient_name=self.request.ingredient_name,
+                ingredient_id=self.request.ingredient_id,
+                container_expected_pose=self.request.container_expected_pose,
+                container_actual_pose=self.container_actual_pose,
+            )
+
             # Move to expected ingredient position
             self.log("Moving to expected ingredient position")
-            pose = make_pose(
+            temp_pose = make_pose(
                 [
                     self.request.container_expected_pose[0],
                     self.request.container_expected_pose[1] - 0.20,
                     self.request.container_expected_pose[2] + 0.10,
                 ],
-                # self.request.container_expected_pose[3:],
-                [
-                    pose_marker_base_frame.pose.orientation.x,
-                    pose_marker_base_frame.pose.orientation.y,
-                    pose_marker_base_frame.pose.orientation.z,
-                    pose_marker_base_frame.pose.orientation.w,
-                ],
+                self.request.container_expected_pose[3:],
+                # [
+                #     pose_marker_base_frame.pose.orientation.x,
+                #     pose_marker_base_frame.pose.orientation.y,
+                #     pose_marker_base_frame.pose.orientation.z,
+                #     pose_marker_base_frame.pose.orientation.w,
+                # ],
             )
-            if not self.__robot_go_to_pose_goal(pose=pose):
+            temp_pose = self.__correct_gripper_angle_tilt(temp_pose)
+            if not self.__robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
                 return
@@ -409,12 +423,6 @@ class Ratatouille:
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            self.container = Container(
-                ingredient_name=self.request.ingredient_name,
-                ingredient_id=self.request.ingredient_id,
-                container_expected_pose=self.request.container_expected_pose,
-                container_actual_pose=self.container_actual_pose,
-            )
             self.state = RatatouilleStates.CHECK_QUANTITY
             # TODO-nevalsar: Remove
             # self.state = RatatouilleStates.REPLACE_CONTAINER
@@ -557,12 +565,11 @@ class Ratatouille:
 
             # revert correction for gripper angle tilt
             _temp_pose = self.__correct_gripper_angle_tilt(
-                self.robot_mg.get_current_pose(stamped=True), reverse=False
+                self.robot_mg.get_current_pose(), reverse=False
             )
 
             if not self.__robot_go_to_pose_goal(
-                offset_pose(_temp_pose.pose, [0, -0.20, -0.03])
-                # offset_pose(self.robot_mg.get_current_pose(), [0, -0.20, -0.03])
+                offset_pose(_temp_pose, [0, -0.20, -0.04])
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -622,25 +629,25 @@ class Ratatouille:
             )
 
     def __correct_gripper_angle_tilt(
-        self, pose_marker_base_frame: PoseStamped, reverse: bool = False
-    ) -> PoseStamped:
+        self, pose: Pose, reverse: bool = False
+    ) -> Pose:
         _temp_euler = euler_from_quaternion(
             (
-                pose_marker_base_frame.pose.orientation.x,
-                pose_marker_base_frame.pose.orientation.y,
-                pose_marker_base_frame.pose.orientation.z,
-                pose_marker_base_frame.pose.orientation.w,
+                pose.orientation.x,
+                pose.orientation.y,
+                pose.orientation.z,
+                pose.orientation.w,
             )
         )
         angle_offset = 0.04 * (-1, 1)[reverse]
         _temp_quaternion = quaternion_from_euler(
             _temp_euler[0] + angle_offset, _temp_euler[1], _temp_euler[2]
         )
-        pose_marker_base_frame.pose.orientation.x = _temp_quaternion[0]
-        pose_marker_base_frame.pose.orientation.y = _temp_quaternion[1]
-        pose_marker_base_frame.pose.orientation.z = _temp_quaternion[2]
-        pose_marker_base_frame.pose.orientation.w = _temp_quaternion[3]
-        return pose_marker_base_frame
+        pose.orientation.x = _temp_quaternion[0]
+        pose.orientation.y = _temp_quaternion[1]
+        pose.orientation.z = _temp_quaternion[2]
+        pose.orientation.w = _temp_quaternion[3]
+        return pose
 
     def log(self, msg):
         if self.verbose:
