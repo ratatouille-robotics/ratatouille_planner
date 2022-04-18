@@ -18,18 +18,18 @@ stateDiagram-v2
     has_request1 --> AWAIT_USER_INPUT: False
     has_request1 --> SEARCH_MARKER: True
     has_container --> has_request2: True \n Has Request?
-    has_request2 --> CHECK_QUANTITY: True
+    has_request2 --> DISPENSE: True
     has_request2 --> REPLACE_CONTAINER: False
 
     AWAIT_USER_INPUT --> HOME: has_request = True
 
     SEARCH_MARKER --> VERIFY_INGREDIENT
     VERIFY_INGREDIENT --> PICK_CONTAINER
-    PICK_CONTAINER --> HOME: has_container = True
+    PICK_CONTAINER --> CHECK_QUANTITY: has_container = True
 
     REPLACE_CONTAINER --> HOME: has_container = False
 
-    CHECK_QUANTITY --> DISPENSE
+    CHECK_QUANTITY --> HOME
     DISPENSE --> HOME: has_request = False
 
     LOG_ERROR --> HOME: Reset error \n has_request = False
@@ -57,8 +57,9 @@ flowchart
   AWAIT_USER_INPUT --> |Set has_request = True| GH
 
   HR1 --> |True| SEARCH_MARKER[Go to ingredient position & search for container]
-  SEARCH_MARKER --> PICK_CONTAINER[Correct pose & pick container]
-  PICK_CONTAINER --> |Set has_container = True| GH
+  SEARCH_MARKER --> VF[Verify ingredient & correct pose]
+  VF --> CQ[Pick container & check quantity sufficient]
+  CQ --> |Set has_container = True| GH
 
   HC --> |True| HR2{has_request?}
 

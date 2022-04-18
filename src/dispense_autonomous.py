@@ -181,7 +181,7 @@ class Ratatouille:
                 if self.request is None:
                     self.state = RatatouilleStates.REPLACE_CONTAINER
                 else:
-                    self.state = RatatouilleStates.CHECK_QUANTITY
+                    self.state = RatatouilleStates.DISPENSE
 
         elif self.state == RatatouilleStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
@@ -241,6 +241,9 @@ class Ratatouille:
                     self.error_message = "Unable to parse user input."
 
             if self.error_message is None:
+                self.log(
+                    f"User requested for [{self.request.quantity} grams] of [{self.request.ingredient_name}]"
+                )
                 self.state = RatatouilleStates.HOME
             else:
                 self.state = RatatouilleStates.LOG_ERROR
@@ -294,13 +297,18 @@ class Ratatouille:
                     is_marker_detected = True
                     break
 
-            if is_marker_detected:
-                self.state = RatatouilleStates.VERIFY_INGREDIENT
-            else:
+            if not is_marker_detected:
                 self.error_message = f"Unable to find ingredient marker."
                 self.state = RatatouilleStates.LOG_ERROR
+                return
+
+            self.state = RatatouilleStates.VERIFY_INGREDIENT
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
+            # TODO-nevalsar: Remove
+            # self.state = RatatouilleStates.PICK_CONTAINER
+            # return
+
             start_time = time.time()
             is_ingredient_detected: bool = False
 
@@ -334,7 +342,7 @@ class Ratatouille:
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            #  Compute container position
+            #  Compute actual container position
 
             # Compute pose of container using fixed offset from the pre-grasp frame
             # w.r.t base_link
@@ -351,9 +359,11 @@ class Ratatouille:
             # correct gripper angling upward issue by adding pitch correction to tilt
             # the gripper upward
 
+            self.log(f"Correcting pose: {pose_marker_base_frame}")
             pose_marker_base_frame = self.__correct_gripper_angle_tilt(
                 pose_marker_base_frame
             )
+            self.log(f"Corrected pose: {pose_marker_base_frame}")
 
             # Move to container position
             self.log("Moving to pick container from actual container position")
@@ -376,7 +386,13 @@ class Ratatouille:
                     self.request.container_expected_pose[1] - 0.20,
                     self.request.container_expected_pose[2] + 0.10,
                 ],
-                self.request.container_expected_pose[3:],
+                # self.request.container_expected_pose[3:],
+                [
+                    pose_marker_base_frame.pose.orientation.x,
+                    pose_marker_base_frame.pose.orientation.y,
+                    pose_marker_base_frame.pose.orientation.z,
+                    pose_marker_base_frame.pose.orientation.w,
+                ],
             )
             if not self.__robot_go_to_pose_goal(pose=pose):
                 self.error_message = "Error moving to pose goal"
@@ -399,7 +415,7 @@ class Ratatouille:
                 container_expected_pose=self.request.container_expected_pose,
                 container_actual_pose=self.container_actual_pose,
             )
-            self.state = RatatouilleStates.HOME
+            self.state = RatatouilleStates.CHECK_QUANTITY
             # TODO-nevalsar: Remove
             # self.state = RatatouilleStates.REPLACE_CONTAINER
 
@@ -424,7 +440,7 @@ class Ratatouille:
                 self.error_message = f"Insufficient quantity"
                 self.state = RatatouilleStates.LOG_ERROR
             else:
-                self.state = RatatouilleStates.DISPENSE
+                self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.DISPENSE:
             # # # TODO-nevalsar Remove
@@ -461,7 +477,7 @@ class Ratatouille:
             )
             dispenser = Dispenser(self.robot_mg)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
-                dispensing_params, float(self.request.quantity), log_data=False
+                dispensing_params, float(self.request.quantity), log_data=True
             )
             actual_dispensed_quantity = float(actual_dispensed_quantity)
 
@@ -476,9 +492,6 @@ class Ratatouille:
             ] -= actual_dispensed_quantity
             self.log(f"Updated ingredient quantities : {self.ingredient_quantities}")
 
-            # Since dispensing is complete, clear user request
-            self.request = None
-
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
@@ -488,6 +501,9 @@ class Ratatouille:
                 dispense_log_file.write(
                     f"{datetime.now()} - [{self.request.ingredient_name}] - Expected: [{self.request.quantity}], Actual: [{actual_dispensed_quantity}], Error: [{dispense_error}]\n"
                 )
+
+            # Since dispensing is complete, clear user request
+            self.request = None
 
             self.state = RatatouilleStates.HOME
 
@@ -607,7 +623,7 @@ class Ratatouille:
 
     def __correct_gripper_angle_tilt(
         self, pose_marker_base_frame: PoseStamped, reverse: bool = False
-    ):
+    ) -> PoseStamped:
         _temp_euler = euler_from_quaternion(
             (
                 pose_marker_base_frame.pose.orientation.x,
@@ -616,7 +632,7 @@ class Ratatouille:
                 pose_marker_base_frame.pose.orientation.w,
             )
         )
-        angle_offset = 0.04 * (1, -1)[reverse]
+        angle_offset = 0.04 * (-1, 1)[reverse]
         _temp_quaternion = quaternion_from_euler(
             _temp_euler[0] + angle_offset, _temp_euler[1], _temp_euler[2]
         )

@@ -4,7 +4,7 @@
   <!--Robot description and parameter files -->
   <arg name="robot_ip" default="10.0.0.2" doc="UR5's IP" />
   <arg name="kinematics_config" default="/home/ratatouille/my_robot_calibration.yaml" />
-  <arg name="rviz_config" default="$(find ur5e_moveit_config)/launch/moveit_ratatouille_pose_estimation.rviz" />
+  <arg name="rviz_config" default="$(find ur5e_moveit_config)/launch/moveit_ratatouille_autonomous_dispensing.rviz" />
   <arg name="realsense_camera_type" default="d435" />
 
   <!-- Robot bringup -->
