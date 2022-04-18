@@ -380,6 +380,11 @@ class Ratatouille:
             self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.CHECK_QUANTITY:
+            # TODO-nevalsar: Remove
+            # self.error_message = f"Insufficient quantity"
+            # self.state = RatatouilleStates.LOG_ERROR
+            # return
+
             self.log("Wait for weight estimate from force-torque sensor")
             weight_estimate: Float64 = rospy.wait_for_message(
                 "force_torque_weight", Float64, timeout=None
@@ -399,10 +404,10 @@ class Ratatouille:
                 self.state = RatatouilleStates.DISPENSE
 
         elif self.state == RatatouilleStates.DISPENSE:
-            # # TODO-nevalsar Remove
-            self.request = None
-            self.state = RatatouilleStates.HOME
-            return
+            # # # TODO-nevalsar Remove
+            # self.request = None
+            # self.state = RatatouilleStates.HOME
+            # return
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
@@ -490,8 +495,14 @@ class Ratatouille:
 
             # Move to ingredient position
             self.log("Moving to replace container at ingredient position")
+
+            # revert correction for gripper angle tilt
+            _temp_pose = self.__correct_gripper_angle_tilt(
+                self.robot_mg.get_current_pose(stamped=True), reverse=True
+            )
+
             if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), [0, -0.20, -0.03])
+                offset_pose(_temp_pose.pose, [0, -0.20, -0.03])
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -550,7 +561,9 @@ class Ratatouille:
                 orient_tolerance=orient_tolerance,
             )
 
-    def __correct_gripper_angle_tilt(self, pose_marker_base_frame: Pose):
+    def __correct_gripper_angle_tilt(
+        self, pose_marker_base_frame: PoseStamped, reverse: bool = False
+    ):
         _temp_euler = euler_from_quaternion(
             (
                 pose_marker_base_frame.pose.orientation.x,
@@ -559,8 +572,9 @@ class Ratatouille:
                 pose_marker_base_frame.pose.orientation.w,
             )
         )
+        angle_offset = 0.04 * (1, -1)[reverse]
         _temp_quaternion = quaternion_from_euler(
-            _temp_euler[0] + 0.04, _temp_euler[1], _temp_euler[2]
+            _temp_euler[0] + angle_offset, _temp_euler[1], _temp_euler[2]
         )
         pose_marker_base_frame.pose.orientation.x = _temp_quaternion[0]
         pose_marker_base_frame.pose.orientation.y = _temp_quaternion[1]

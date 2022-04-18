@@ -4,15 +4,20 @@ container: regular
 pouring_position: edge
 controller:
   type: pd
-  morphology: 
+  error_threshold: 20.0
   p_gain: 0.0025
   d_gain: 0.02
   acc_scaling: 2
   vel_scaling: 0.5
   rot_axis: [1, 0, 0]
   shaking: True
-  rot_shake_params:
-    axis: [0, 0, 1]
-    amplitude: 0.05
-    frequency: 5
-    pattern: [1]
+  # rot_shake_params:
+  #   axis: [0, 0, 1]
+  #   amplitude: 0.05
+  #   frequency: 4
+  #   pattern: [1]
+  trans_shake_params:
+    axis: [1, 0, 0]
+    amplitude: 0.005
+    frequency: 4
+    pattern: [1, 1, 0, 0, 0, 0]
