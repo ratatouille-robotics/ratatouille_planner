@@ -1,0 +1,13 @@
+name: salt
+tolerance: 5.0
+container: regular
+pouring_position: corner
+controller:
+  type: pd
+  error_threshold: 3.0
+  p_gain: 0.0025
+  d_gain: 0.01
+  acc_scaling: 1
+  vel_scaling: 1
+  rot_axis: [0, 0, -1]
+  shaking: False

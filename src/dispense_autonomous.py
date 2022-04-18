@@ -12,6 +12,7 @@ from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64, String
 from typing import List
 import time
+from datetime import datetime
 
 from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
@@ -23,23 +24,27 @@ from sensor_interface.msg import UserInput
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
 _DISPENSE_THRESHOLD = 50
-_INGREDIENT_DETECTION_TIMEOUT_SECONDS = 10
+_INGREDIENT_DETECTION_TIMEOUT_SECONDS = 5
+_MARKER_DETECTION_TIMEOUT_SECONDS = 5
 
 
 class Container:
     ingredient_id: int = None
     ingredient_name: str = None
     container_expected_pose: List[float] = None
+    container_actual_pose: PoseStamped
 
     def __init__(
         self,
         ingredient_id: int,
         ingredient_name: str,
         container_expected_pose: List[float],
+        container_actual_pose: PoseStamped,
     ) -> None:
         self.ingredient_name = ingredient_name
         self.id = ingredient_id
         self.container_expected_pose = container_expected_pose
+        self.container_actual_pose = container_actual_pose
 
 
 class DispensingRequest:
@@ -97,10 +102,14 @@ class Ratatouille:
     error_message: str = None
     ingredient_quantities: dict = None
 
+    # log files
+    dispense_log_file: str = None
+
     def __init__(
         self,
         state: RatatouilleStates,
         config_dir_path: str,
+        dispense_log_file: str,
         disable_gripper: bool = False,
         verbose: bool = False,
         stop_and_proceed: bool = False,
@@ -151,6 +160,9 @@ class Ratatouille:
         self.request = None
         self.error_message = None
 
+        # initialize log file paths
+        self.dispense_log_file = dispense_log_file
+
     def run(self) -> None:
         print("\n" + "-" * 80)
         print(f" {self.state} ".center(80))
@@ -196,7 +208,7 @@ class Ratatouille:
                     )[0]
                     self.request = DispensingRequest(
                         ingredient_id=ingredient["id"],
-                        ingredient_name=ingredient["name"],
+                        ingredient_name=ingredient["name"].lower(),
                         container_pose=ingredient["view_pose"],
                         quantity=float(user_request.quantity),
                     )
@@ -205,10 +217,8 @@ class Ratatouille:
             else:
                 # print menu and read input from command line
                 print(" INGREDIENTS: ".center(80, "-"))
-                for index, ingredient in enumerate(
-                    self.known_poses["cartesian"]["ingredients"]
-                ):
-                    print(f"{index + 1}: {ingredient['name']}")
+                for ingredient in self.known_poses["cartesian"]["ingredients"]:
+                    print(f"{ingredient['id']}: {ingredient['name']}")
                 print("-" * 80)
                 _raw_input_ingredient_id = input("Enter ingredient number: ")
                 _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
@@ -223,7 +233,7 @@ class Ratatouille:
                     )[0]
                     self.request = DispensingRequest(
                         ingredient_id=ingredient["id"],
-                        ingredient_name=ingredient["name"],
+                        ingredient_name=ingredient["name"].lower(),
                         container_pose=ingredient["view_pose"],
                         quantity=float(_raw_input_ingredient_quantity),
                     )
@@ -254,7 +264,7 @@ class Ratatouille:
             # Compute pregrasp position
 
             # Compute a pose at origin in pre-grasp frame w.r.t base_link
-            self.log("Computing pregrasp position")
+            self.log("Computing pregrasp pose in world frame")
             marker_origin = Pose()
             marker_origin.position.x = 0.00
             marker_origin.position.y = 0.00
@@ -265,18 +275,29 @@ class Ratatouille:
             marker_origin.orientation.z = quat[2]
             marker_origin.orientation.w = quat[3]
 
-            time.sleep(1)
-            self.container_actual_pose = self.pose_transformer.transform_pose_to_frame(
-                pose_source=marker_origin,
-                header_frame_id="pregrasp_" + str(self.request.ingredient_id),
-                base_frame_id="base_link",
-            )
-            if self.container_actual_pose is None:
-                self.error_message = f"Unable to find ingredient marker."
+            start_time = time.time()
+            is_marker_detected: bool = False
+            self.container_actual_pose = None
+            while (
+                not is_marker_detected
+                and time.time() < start_time + _MARKER_DETECTION_TIMEOUT_SECONDS
+            ):
+                time.sleep(1)
+                self.container_actual_pose = (
+                    self.pose_transformer.transform_pose_to_frame(
+                        pose_source=marker_origin,
+                        header_frame_id="pregrasp_" + str(self.request.ingredient_id),
+                        base_frame_id="base_link",
+                    )
+                )
+                if self.container_actual_pose is not None:
+                    is_marker_detected = True
+                    break
 
-            if self.error_message is None:
+            if is_marker_detected:
                 self.state = RatatouilleStates.VERIFY_INGREDIENT
             else:
+                self.error_message = f"Unable to find ingredient marker."
                 self.state = RatatouilleStates.LOG_ERROR
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
@@ -376,8 +397,11 @@ class Ratatouille:
                 ingredient_name=self.request.ingredient_name,
                 ingredient_id=self.request.ingredient_id,
                 container_expected_pose=self.request.container_expected_pose,
+                container_actual_pose=self.container_actual_pose,
             )
             self.state = RatatouilleStates.HOME
+            # TODO-nevalsar: Remove
+            # self.state = RatatouilleStates.REPLACE_CONTAINER
 
         elif self.state == RatatouilleStates.CHECK_QUANTITY:
             # TODO-nevalsar: Remove
@@ -386,18 +410,17 @@ class Ratatouille:
             # return
 
             self.log("Wait for weight estimate from force-torque sensor")
+            time.sleep(2)
             weight_estimate: Float64 = rospy.wait_for_message(
                 "force_torque_weight", Float64, timeout=None
             )
+            weight_estimate = weight_estimate.data * 1000
 
-            self.log(f"Estimated weight: {weight_estimate.data * 1000}")
+            self.log(f"Estimated weight: {weight_estimate}")
             self.log(f"Requested weight: {self.request.quantity}")
 
             # mark dispensing complete to replace container in shelf
-            if (
-                weight_estimate.data * 1000
-                < self.request.quantity + _DISPENSE_THRESHOLD
-            ):
+            if weight_estimate < self.request.quantity + _DISPENSE_THRESHOLD:
                 self.error_message = f"Insufficient quantity"
                 self.state = RatatouilleStates.LOG_ERROR
             else:
@@ -433,21 +456,39 @@ class Ratatouille:
                 return
 
             # Dispense ingredient
-            self.log("Dispensing ingredient")
+            self.log(
+                f"Dispensing [{self.request.quantity}] grams of [{self.request.ingredient_name}]"
+            )
             dispenser = Dispenser(self.robot_mg)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
-                dispensing_params, float(self.request.quantity)
+                dispensing_params, float(self.request.quantity), log_data=False
             )
+            actual_dispensed_quantity = float(actual_dispensed_quantity)
+
+            dispense_error = actual_dispensed_quantity - self.request.quantity
+            self.log(
+                f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request.quantity}] grams)"
+            )
+
+            # update ingredient quantities
+            self.ingredient_quantities[
+                self.request.ingredient_name
+            ] -= actual_dispensed_quantity
+            self.log(f"Updated ingredient quantities : {self.ingredient_quantities}")
+
+            # Since dispensing is complete, clear user request
+            self.request = None
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
             self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
 
-            # Once dispensing completed, clear user request
-            self.ingredient_quantities[self.request.ingredient_name] -= float(
-                actual_dispensed_quantity
-            )
-            self.request = None
+            # add entry to dispensing log file
+            with open(self.dispense_log_file, "a+") as dispense_log_file:
+                dispense_log_file.write(
+                    f"{datetime.now()} - [{self.request.ingredient_name}] - Expected: [{self.request.quantity}], Actual: [{actual_dispensed_quantity}], Error: [{dispense_error}]\n"
+                )
+
             self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
@@ -478,7 +519,9 @@ class Ratatouille:
             #     return
 
             # Move up a little to prevent container hitting the shelf
-            self.log("Moving up to avoid hitting shelf while replacing container")
+            self.log(
+                "Moving a little above expected view (to avoid hitting shelf while replacing container)"
+            )
             if not self.__robot_go_to_pose_goal(
                 offset_pose(
                     make_pose(
@@ -498,11 +541,12 @@ class Ratatouille:
 
             # revert correction for gripper angle tilt
             _temp_pose = self.__correct_gripper_angle_tilt(
-                self.robot_mg.get_current_pose(stamped=True), reverse=True
+                self.robot_mg.get_current_pose(stamped=True), reverse=False
             )
 
             if not self.__robot_go_to_pose_goal(
                 offset_pose(_temp_pose.pose, [0, -0.20, -0.03])
+                # offset_pose(self.robot_mg.get_current_pose(), [0, -0.20, -0.03])
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -601,6 +645,7 @@ if __name__ == "__main__":
         "--debug", help="Enable debug mode (run without robot)", action="store_true"
     )
     parser.add_argument("--config-dir", help="Directory path for configuration files")
+    parser.add_argument("--dispense-log-file", help="Dispense log file path")
     parser.add_argument(
         "--disable-gripper", help="Disable gripper commands", action="store_true"
     )
@@ -624,10 +669,19 @@ if __name__ == "__main__":
     if args.stop_and_proceed:
         args.verbose = True
 
+    rospack = rospkg.RosPack()
+    package_path = rospack.get_path(_ROS_NODE_NAME)
+
     if args.config_dir is None:
-        rospack = rospkg.RosPack()
-        package_path = rospack.get_path(_ROS_NODE_NAME)
         args.config_dir = os.path.join(package_path, "config")
+
+    if args.dispense_log_file is None:
+        args.dispense_log_file = os.path.join(
+            package_path, "logs", "dispense_history.log"
+        )
+        temp_dir = os.path.dirname(args.dispense_log_file)
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
 
     # initialize state machine
     ratatouille = Ratatouille(
@@ -638,6 +692,7 @@ if __name__ == "__main__":
         stop_and_proceed=args.stop_and_proceed,
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
+        dispense_log_file=args.dispense_log_file,
     )
 
     # run state machine while ROS is running
