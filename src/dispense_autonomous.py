@@ -138,6 +138,9 @@ class Ratatouille:
             mode="r",
         ) as _temp:
             self.known_poses = yaml.safe_load(_temp)
+            self.known_poses["cartesian"]["ingredients"] = sorted(
+                self.known_poses["cartesian"]["ingredients"], key=lambda x: x["id"]
+            )
         self.pouring_characteristics = {}
         for ingredient in self.known_poses["cartesian"]["ingredients"]:
             with open(
@@ -170,7 +173,10 @@ class Ratatouille:
 
         if self.state == RatatouilleStates.HOME:
             self.log(f"Moving to home")
-            self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
+            if not self.__robot_go_to_joint_state(self.known_poses["joint"]["home"]):
+                self.error_message = "Unable to move to joint state"
+                self.state = RatatouilleStates.LOG_ERROR
+                return
 
             if self.container is None:
                 if self.request is None:
@@ -251,7 +257,7 @@ class Ratatouille:
         elif self.state == RatatouilleStates.SEARCH_MARKER:
             # Move to ingredient view position
             self.log(
-                f"Moving to ingredient view position: {self.request.ingredient_name}"
+                f"Moving to ingredient view position for [{self.request.ingredient_name}]"
             )
             if not self.__robot_go_to_pose_goal(
                 pose=make_pose(
@@ -285,7 +291,7 @@ class Ratatouille:
                 not is_marker_detected
                 and time.time() < start_time + _MARKER_DETECTION_TIMEOUT_SECONDS
             ):
-                time.sleep(1)
+                time.sleep(0.1)
                 self.container_actual_pose = (
                     self.pose_transformer.transform_pose_to_frame(
                         pose_source=marker_origin,
@@ -312,27 +318,29 @@ class Ratatouille:
             start_time = time.time()
             is_ingredient_detected: bool = False
 
-            rospy.wait_for_service('ingredient_validation')
+            rospy.wait_for_service("ingredient_validation")
             try:
-                service_call = rospy.ServiceProxy('ingredient_validation', ValidateIngredient)
-                print("Calling service")
+                service_call = rospy.ServiceProxy(
+                    "ingredient_validation", ValidateIngredient
+                )
                 response = service_call()
                 detected_ingredient = response.found_ingredient.lower()
             except rospy.ServiceException as e:
-                print("Service call failed: %s"%e)
                 self.error_message = (
-                    f"Ingredient {self.request.ingredient_name} not detected. Error: {e}"
+                    f"Ingredient detection service call failed. Error: {e}"
                 )
                 self.state = RatatouilleStates.LOG_ERROR
 
-            self.log(f"Expected {self.request.ingredient_name}. Detected {detected_ingredient}")
+            self.log(
+                f"Expected [{self.request.ingredient_name}]. Detected [{detected_ingredient}]"
+            )
 
-            if detected_ingredient == self.request.ingredient_name or detected_ingredient == "zucchini":
+            if detected_ingredient == self.request.ingredient_name:
                 self.log(f"Ingredient [{self.request.ingredient_name}] verified.")
                 self.state = RatatouilleStates.PICK_CONTAINER
             else:
                 self.error_message = (
-                    f"Ingredient {self.request.ingredient_name} not detected."
+                    f"Ingredient [{self.request.ingredient_name}] not detected."
                 )
                 self.state = RatatouilleStates.LOG_ERROR
 
@@ -458,7 +466,12 @@ class Ratatouille:
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
-            self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
+            if not self.__robot_go_to_joint_state(
+                self.known_poses["joint"]["pre_dispense"]
+            ):
+                self.error_message = "Unable to move to joint state"
+                self.state = RatatouilleStates.LOG_ERROR
+                return
 
             # Move to dispense position
             self.log(
@@ -502,7 +515,12 @@ class Ratatouille:
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
-            self.__robot_go_to_joint_state(self.known_poses["joint"]["pre_dispense"])
+            if not self.__robot_go_to_joint_state(
+                self.known_poses["joint"]["pre_dispense"]
+            ):
+                self.error_message = "Unable to move to joint state"
+                self.state = RatatouilleStates.LOG_ERROR
+                return
 
             # add entry to dispensing log file
             with open(self.dispense_log_file, "a+") as dispense_log_file:
@@ -628,9 +646,7 @@ class Ratatouille:
                 orient_tolerance=orient_tolerance,
             )
 
-    def __correct_gripper_angle_tilt(
-        self, pose: Pose, reverse: bool = False
-    ) -> Pose:
+    def __correct_gripper_angle_tilt(self, pose: Pose, reverse: bool = False) -> Pose:
         _temp_euler = euler_from_quaternion(
             (
                 pose.orientation.x,
