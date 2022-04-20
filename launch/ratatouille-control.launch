@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- User Input PCB -->
+  <!-- <node pkg="sensor_interface" type="user_input_pcb.py" name="user_input_pcb"></node> -->
+
+  <!-- State planner script -->
+  <node pkg="ratatouille_planner" type="dispense_autonomous.py" name="dispense_autonomous" output="screen"></node>
+</launch>

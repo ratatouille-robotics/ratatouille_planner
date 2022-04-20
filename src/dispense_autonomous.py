@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import rospy
 import rospkg
 import argparse
@@ -110,6 +111,7 @@ class Ratatouille:
         state: RatatouilleStates,
         config_dir_path: str,
         dispense_log_file: str,
+        ingredient_quantity_log: str,
         disable_gripper: bool = False,
         verbose: bool = False,
         stop_and_proceed: bool = False,
@@ -165,6 +167,7 @@ class Ratatouille:
 
         # initialize log file paths
         self.dispense_log_file = dispense_log_file
+        self.ingredient_quantity_log = ingredient_quantity_log
 
     def run(self) -> None:
         print("\n" + "-" * 80)
@@ -528,6 +531,12 @@ class Ratatouille:
                     f"{datetime.now()} - [{self.request.ingredient_name}] - Expected: [{self.request.quantity}], Actual: [{actual_dispensed_quantity}], Error: [{dispense_error}]\n"
                 )
 
+            # add entry to dispensing log file
+            with open(self.ingredient_quantity_log, "w+") as dispense_log_file:
+                dispense_log_file.write(
+                    f"{datetime.now()}\n{self.ingredient_quantities}\n"
+                )
+
             # Since dispensing is complete, clear user request
             self.request = None
 
@@ -684,7 +693,8 @@ if __name__ == "__main__":
         "--debug", help="Enable debug mode (run without robot)", action="store_true"
     )
     parser.add_argument("--config-dir", help="Directory path for configuration files")
-    parser.add_argument("--dispense-log-file", help="Dispense log file path")
+    parser.add_argument("--dispense-log-file", help="Dispensing log file path")
+    parser.add_argument("--ingredient-quantity-log", help="Ingredient quantity log file path")
     parser.add_argument(
         "--disable-gripper", help="Disable gripper commands", action="store_true"
     )
@@ -698,6 +708,7 @@ if __name__ == "__main__":
         action="store_true",
     )
     args = parser.parse_args()
+    # args = parser.parse_args(sys.argv[4:])
 
     # Set additional options for running in debug mode
     if args.debug:
@@ -722,6 +733,15 @@ if __name__ == "__main__":
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
 
+    if args.ingredient_quantity_log is None:
+        args.ingredient_quantity_log = os.path.join(
+            package_path, "logs", "ingredient_quantities.log"
+        )
+        temp_dir = os.path.dirname(args.ingredient_quantity_log)
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+
+
     # initialize state machine
     ratatouille = Ratatouille(
         RatatouilleStates.HOME,
@@ -732,6 +752,7 @@ if __name__ == "__main__":
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
         dispense_log_file=args.dispense_log_file,
+        ingredient_quantity_log=args.ingredient_quantity_log
     )
 
     # run state machine while ROS is running
