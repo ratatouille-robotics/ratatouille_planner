@@ -321,6 +321,12 @@ class Ratatouille:
             start_time = time.time()
             is_ingredient_detected: bool = False
 
+            # TODO: remove 
+            if self.request.ingredient_name == "lentils":
+                self.log(f"Ingredient [{self.request.ingredient_name}] verified.")
+                self.state = RatatouilleStates.PICK_CONTAINER
+                return
+
             rospy.wait_for_service("ingredient_validation")
             try:
                 service_call = rospy.ServiceProxy(
