@@ -314,9 +314,10 @@ class Ratatouille:
             self.state = RatatouilleStates.VERIFY_INGREDIENT
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
-            # TODO-nevalsar: Remove
-            # self.state = RatatouilleStates.PICK_CONTAINER
-            # return
+            # Debugging code to bypass verfication
+            self.state = RatatouilleStates.PICK_CONTAINER
+            return
+            # End debugging code to bypass verfication
 
             start_time = time.time()
             is_ingredient_detected: bool = False
