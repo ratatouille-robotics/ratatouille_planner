@@ -283,9 +283,9 @@ class Ratatouille:
             #     acc_scaling=0.1,
             # )
             if not self.__go_to_pose_cartesian_order(
-                pose=make_pose(
+                make_pose(
                     self.request.container_expected_pose[:3],
-                    self.request.container_expected_pose[3:],
+                    self.request.container_expected_pose[3:]
                 ),
                 acceleration_scaling_factor=0.1,
             ):
@@ -701,25 +701,29 @@ class Ratatouille:
         return pose
 
     def __go_to_pose_cartesian_order(
-        self, pose: Pose, acceleration_scaling_factor: float, reverse: bool = False
+        self, goal: Pose, acceleration_scaling_factor: float, reverse: bool = False
     ) -> None:
         # go to required orientation
         current_pose = self.robot_mg.get_current_pose()
         if not self.__robot_go_to_pose_goal(
             make_pose(
-                [0, 0, 0],
                 [
-                    current_pose.orientation.x,
-                    current_pose.orientation.y,
-                    current_pose.orientation.z,
-                    current_pose.orientation.w,
+                    current_pose.position.x,
+                    current_pose.position.y,
+                    current_pose.position.z,
+                ],
+                [
+                    goal.orientation.x,
+                    goal.orientation.y,
+                    goal.orientation.z,
+                    goal.orientation.w,
                 ],
             )
         ):
             return False
 
         relative_pose: Pose = offset_pose_relative(
-            pose, self.robot_mg.get_current_pose()
+            goal, self.robot_mg.get_current_pose()
         )
         offsets = [
             [relative_pose.position.x, 0, 0],
