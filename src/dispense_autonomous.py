@@ -17,7 +17,7 @@ from datetime import datetime
 
 from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
-from motion.utils import make_pose, offset_pose
+from motion.utils import make_pose, offset_pose, offset_pose_relative
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
@@ -176,10 +176,23 @@ class Ratatouille:
 
         if self.state == RatatouilleStates.HOME:
             self.log(f"Moving to home")
-            if not self.__robot_go_to_joint_state(self.known_poses["joint"]["home"]):
-                self.error_message = "Unable to move to joint state"
-                self.state = RatatouilleStates.LOG_ERROR
-                return
+            # if not self.__robot_go_to_joint_state(self.known_poses["joint"]["home"]):
+            if not self.__go_to_pose_cartesian_order(
+                make_pose(
+                    self.known_poses["cartesian"]["home"][:3],
+                    self.known_poses["cartesian"]["home"][3:],
+                ),
+                acceleration_scaling_factor=0.1,
+                reverse=True,
+            ):
+                # if unable to go to home position using cartesian goal, go to joint-state goal
+                print("Unable to go to cartesian goal, using joint-state goal")
+                if not self.__robot_go_to_joint_state(
+                    self.known_poses["joint"]["home"]
+                ):
+                    self.error_message = "Unable to move to joint state"
+                    self.state = RatatouilleStates.LOG_ERROR
+                    return
 
             if self.container is None:
                 if self.request is None:
@@ -262,12 +275,19 @@ class Ratatouille:
             self.log(
                 f"Moving to ingredient view position for [{self.request.ingredient_name}]"
             )
-            if not self.__robot_go_to_pose_goal(
+            # if not self.__robot_go_to_pose_goal(
+            #     pose=make_pose(
+            #         self.request.container_expected_pose[:3],
+            #         self.request.container_expected_pose[3:],
+            #     ),
+            #     acc_scaling=0.1,
+            # )
+            if not self.__go_to_pose_cartesian_order(
                 pose=make_pose(
                     self.request.container_expected_pose[:3],
                     self.request.container_expected_pose[3:],
                 ),
-                acc_scaling=0.1,
+                acceleration_scaling_factor=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -315,14 +335,13 @@ class Ratatouille:
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
             # Debugging code to bypass verfication
-            self.state = RatatouilleStates.PICK_CONTAINER
-            return
+            # self.state = RatatouilleStates.PICK_CONTAINER
+            # return
             # End debugging code to bypass verfication
 
             start_time = time.time()
-            is_ingredient_detected: bool = False
 
-            # TODO: remove 
+            # TODO: remove
             if self.request.ingredient_name == "lentils":
                 self.log(f"Ingredient [{self.request.ingredient_name}] verified.")
                 self.state = RatatouilleStates.PICK_CONTAINER
@@ -681,6 +700,48 @@ class Ratatouille:
         pose.orientation.w = _temp_quaternion[3]
         return pose
 
+    def __go_to_pose_cartesian_order(
+        self, pose: Pose, acceleration_scaling_factor: float, reverse: bool = False
+    ) -> None:
+        # go to required orientation
+        current_pose = self.robot_mg.get_current_pose()
+        if not self.__robot_go_to_pose_goal(
+            make_pose(
+                [0, 0, 0],
+                [
+                    current_pose.orientation.x,
+                    current_pose.orientation.y,
+                    current_pose.orientation.z,
+                    current_pose.orientation.w,
+                ],
+            )
+        ):
+            return False
+
+        relative_pose: Pose = offset_pose_relative(
+            pose, self.robot_mg.get_current_pose()
+        )
+        offsets = [
+            [relative_pose.position.x, 0, 0],
+            [0, 0, relative_pose.position.z],
+            [0, relative_pose.position.y, 0],
+        ]
+        # offsets = [
+        #     make_pose([current_pose.position.x, current_pose.position.y, current_pose.position.z], current_pose.pose),
+        #     make_pose([current_pose.position.x, current_pose.position.y, current_pose.position.z], current_pose.pose),
+        #     make_pose([current_pose.position.x, current_pose.position.y, current_pose.position.z], current_pose.pose),
+
+        # ]
+        if reverse:
+            offsets.reverse()
+        for offset in offsets:
+            if not self.__robot_go_to_pose_goal(
+                offset_pose(self.robot_mg.get_current_pose(), offset),
+                acc_scaling=acceleration_scaling_factor,
+            ):
+                return False
+        return True
+
     def log(self, msg):
         if self.verbose:
             print(msg)
@@ -701,7 +762,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--config-dir", help="Directory path for configuration files")
     parser.add_argument("--dispense-log-file", help="Dispensing log file path")
-    parser.add_argument("--ingredient-quantity-log", help="Ingredient quantity log file path")
+    parser.add_argument(
+        "--ingredient-quantity-log", help="Ingredient quantity log file path"
+    )
     parser.add_argument(
         "--disable-gripper", help="Disable gripper commands", action="store_true"
     )
@@ -748,7 +811,6 @@ if __name__ == "__main__":
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
 
-
     # initialize state machine
     ratatouille = Ratatouille(
         RatatouilleStates.HOME,
@@ -759,7 +821,7 @@ if __name__ == "__main__":
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
         dispense_log_file=args.dispense_log_file,
-        ingredient_quantity_log=args.ingredient_quantity_log
+        ingredient_quantity_log=args.ingredient_quantity_log,
     )
 
     # run state machine while ROS is running
