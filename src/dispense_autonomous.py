@@ -335,8 +335,8 @@ class Ratatouille:
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
             # Debugging code to bypass verfication
-            # self.state = RatatouilleStates.PICK_CONTAINER
-            # return
+            self.state = RatatouilleStates.PICK_CONTAINER
+            return
             # End debugging code to bypass verfication
 
             start_time = time.time()
@@ -434,7 +434,7 @@ class Ratatouille:
                 [
                     self.request.container_expected_pose[0],
                     self.request.container_expected_pose[1] - 0.20,
-                    self.request.container_expected_pose[2] + 0.10,
+                    self.request.container_expected_pose[2] + 0.025,
                 ],
                 self.request.container_expected_pose[3:],
                 # [
@@ -525,6 +525,14 @@ class Ratatouille:
             self.log(
                 f"Dispensing [{self.request.quantity}] grams of [{self.request.ingredient_name}]"
             )
+
+            # debugging code to bypass dispensing
+            self.request = None
+            self.state = RatatouilleStates.HOME
+            return 
+            # End debugging code to bypass dispensing
+
+
             dispenser = Dispenser(self.robot_mg)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
                 dispensing_params, float(self.request.quantity), log_data=True
@@ -605,7 +613,7 @@ class Ratatouille:
                         self.container.container_expected_pose[:3],
                         self.container.container_expected_pose[3:],
                     ),
-                    [0, 0, 0.12],
+                    [0, 0, 0.03],
                 ),
                 acc_scaling=0.1,
             ):
@@ -703,6 +711,7 @@ class Ratatouille:
     def __go_to_pose_cartesian_order(
         self, goal: Pose, acceleration_scaling_factor: float, reverse: bool = False
     ) -> None:
+        
         # go to required orientation
         current_pose = self.robot_mg.get_current_pose()
         if not self.__robot_go_to_pose_goal(
