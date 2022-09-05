@@ -286,12 +286,14 @@ class Ratatouille:
             #     acc_scaling=0.1,
             # )
             if not self.__go_to_pose_cartesian_order(
-                make_pose(
-                    self.request.container_expected_pose[:3],
-                    self.request.container_expected_pose[3:],
+                offset_pose(
+                    make_pose(
+                        self.request.container_expected_pose[:3],
+                        self.request.container_expected_pose[3:],
+                    ),
+                    _OFFSET_CONTAINER_VIEW,
                 ),
                 acceleration_scaling_factor=0.1,
-                offset=_OFFSET_CONTAINER_VIEW,
             ):
                 # if not self.__robot_go_to_pose_goal(
                 #     offset_pose(self.robot_mg.get_current_pose(), _OFFSET_CONTAINER_VIEW),
@@ -723,17 +725,7 @@ class Ratatouille:
         goal: Pose,
         acceleration_scaling_factor: float,
         reverse: bool = False,
-        offset: List = [0, 0, 0],
     ) -> None:
-
-        # only position offset supported
-        # no support for orientation offset
-        if len(offset) > 3:
-            raise NotImplementedError
-
-        goal.position.x += offset[0]
-        goal.position.y += offset[1]
-        goal.position.z += offset[2]
 
         # go to required orientation
         current_pose = self.robot_mg.get_current_pose()
