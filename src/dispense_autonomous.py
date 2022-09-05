@@ -27,32 +27,35 @@ _ROS_NODE_NAME = "ratatouille_planner"
 _DISPENSE_THRESHOLD = 50
 _INGREDIENT_DETECTION_TIMEOUT_SECONDS = 5
 _MARKER_DETECTION_TIMEOUT_SECONDS = 5
+_OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
+_CONTAINER_LIFT_OFFSET = 0.015
+_CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 
 
 class Container:
     ingredient_id: int = None
     ingredient_name: str = None
     container_expected_pose: List[float] = None
-    container_actual_pose: PoseStamped
+    container_pregrasp_pose: PoseStamped
 
     def __init__(
         self,
         ingredient_id: int,
         ingredient_name: str,
         container_expected_pose: List[float],
-        container_actual_pose: PoseStamped,
+        container_pregrasp_pose: PoseStamped,
     ) -> None:
         self.ingredient_name = ingredient_name
         self.id = ingredient_id
         self.container_expected_pose = container_expected_pose
-        self.container_actual_pose = container_actual_pose
+        self.container_pregrasp_pose = container_pregrasp_pose
 
 
 class DispensingRequest:
     ingredient_id: int = None
     ingredient_name: str = None
     container_expected_pose: List[float] = None
-    container_actual_pose: Pose = None
+    container_pregrasp_pose: Pose = None
     quantity: float = None
 
     def __init__(
@@ -66,7 +69,7 @@ class DispensingRequest:
         self.ingredient_name = ingredient_name
         self.quantity = quantity
         self.container_expected_pose = container_pose
-        self.container_actual_pose = None
+        self.container_pregrasp_pose = None
 
 
 class RatatouilleStates(Enum):
@@ -283,12 +286,19 @@ class Ratatouille:
             #     acc_scaling=0.1,
             # )
             if not self.__go_to_pose_cartesian_order(
-                make_pose(
-                    self.request.container_expected_pose[:3],
-                    self.request.container_expected_pose[3:]
+                offset_pose(
+                    make_pose(
+                        self.request.container_expected_pose[:3],
+                        self.request.container_expected_pose[3:],
+                    ),
+                    _OFFSET_CONTAINER_VIEW,
                 ),
                 acceleration_scaling_factor=0.1,
             ):
+                # if not self.__robot_go_to_pose_goal(
+                #     offset_pose(self.robot_mg.get_current_pose(), _OFFSET_CONTAINER_VIEW),
+                #     acc_scaling=0.1,
+                # ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
                 return
@@ -309,20 +319,20 @@ class Ratatouille:
 
             start_time = time.time()
             is_marker_detected: bool = False
-            self.container_actual_pose = None
+            self.container_pregrasp_pose = None
             while (
                 not is_marker_detected
                 and time.time() < start_time + _MARKER_DETECTION_TIMEOUT_SECONDS
             ):
                 time.sleep(0.1)
-                self.container_actual_pose = (
+                self.container_pregrasp_pose = (
                     self.pose_transformer.transform_pose_to_frame(
                         pose_source=marker_origin,
                         header_frame_id="pregrasp_" + str(self.request.ingredient_id),
                         base_frame_id="base_link",
                     )
                 )
-                if self.container_actual_pose is not None:
+                if self.container_pregrasp_pose is not None:
                     is_marker_detected = True
                     break
 
@@ -380,7 +390,7 @@ class Ratatouille:
             # Move to pregrasp position
             self.log("Moving to pregrasp position")
             if not self.__robot_go_to_pose_goal(
-                pose=self.container_actual_pose.pose, acc_scaling=0.1
+                pose=self.container_pregrasp_pose.pose, acc_scaling=0.1
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -425,7 +435,7 @@ class Ratatouille:
                 ingredient_name=self.request.ingredient_name,
                 ingredient_id=self.request.ingredient_id,
                 container_expected_pose=self.request.container_expected_pose,
-                container_actual_pose=self.container_actual_pose,
+                container_pregrasp_pose=self.container_pregrasp_pose,
             )
 
             # Move to expected ingredient position
@@ -433,16 +443,10 @@ class Ratatouille:
             temp_pose = make_pose(
                 [
                     self.request.container_expected_pose[0],
-                    self.request.container_expected_pose[1] - 0.20,
-                    self.request.container_expected_pose[2] + 0.025,
+                    self.request.container_expected_pose[1],
+                    self.request.container_expected_pose[2] + _CONTAINER_LIFT_OFFSET,
                 ],
                 self.request.container_expected_pose[3:],
-                # [
-                #     pose_marker_base_frame.pose.orientation.x,
-                #     pose_marker_base_frame.pose.orientation.y,
-                #     pose_marker_base_frame.pose.orientation.z,
-                #     pose_marker_base_frame.pose.orientation.w,
-                # ],
             )
             temp_pose = self.__correct_gripper_angle_tilt(temp_pose)
             if not self.__robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
@@ -453,7 +457,10 @@ class Ratatouille:
             # go back out of shelf
             self.log("Backing out of the shelf")
             if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), [0.00, 0.20, 0.00]),
+                offset_pose(
+                    self.robot_mg.get_current_pose(),
+                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, 0],
+                ),
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
@@ -529,9 +536,8 @@ class Ratatouille:
             # debugging code to bypass dispensing
             self.request = None
             self.state = RatatouilleStates.HOME
-            return 
+            return
             # End debugging code to bypass dispensing
-
 
             dispenser = Dispenser(self.robot_mg)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
@@ -607,15 +613,15 @@ class Ratatouille:
             self.log(
                 "Moving a little above expected view (to avoid hitting shelf while replacing container)"
             )
-            if not self.__robot_go_to_pose_goal(
+            if not self.__go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
                         self.container.container_expected_pose[:3],
                         self.container.container_expected_pose[3:],
                     ),
-                    [0, 0, 0.03],
+                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
                 ),
-                acc_scaling=0.1,
+                acceleration_scaling_factor=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -630,7 +636,10 @@ class Ratatouille:
             )
 
             if not self.__robot_go_to_pose_goal(
-                offset_pose(_temp_pose, [0, -0.20, -0.04])
+                offset_pose(
+                    _temp_pose,
+                    [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
+                )
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
@@ -646,7 +655,10 @@ class Ratatouille:
             # Move back out of the shelf
             self.log("Backing out of the shelf")
             if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), [0, 0.20, 0.03]),
+                offset_pose(
+                    self.robot_mg.get_current_pose(),
+                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
+                ),
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
@@ -709,9 +721,12 @@ class Ratatouille:
         return pose
 
     def __go_to_pose_cartesian_order(
-        self, goal: Pose, acceleration_scaling_factor: float, reverse: bool = False
+        self,
+        goal: Pose,
+        acceleration_scaling_factor: float,
+        reverse: bool = False,
     ) -> None:
-        
+
         # go to required orientation
         current_pose = self.robot_mg.get_current_pose()
         if not self.__robot_go_to_pose_goal(
@@ -727,7 +742,8 @@ class Ratatouille:
                     goal.orientation.z,
                     goal.orientation.w,
                 ],
-            )
+            ),
+            orient_tolerance=0.1,
         ):
             return False
 
