@@ -188,14 +188,9 @@ class Ratatouille:
                 acceleration_scaling_factor=0.1,
                 reverse=True,
             ):
-                # if unable to go to home position using cartesian goal, go to joint-state goal
-                print("Unable to go to cartesian goal, using joint-state goal")
-                if not self.__robot_go_to_joint_state(
-                    self.known_poses["joint"]["home"]
-                ):
-                    self.error_message = "Unable to move to joint state"
-                    self.state = RatatouilleStates.LOG_ERROR
-                    return
+                self.error_message = "Unable to move to joint state"
+                self.state = RatatouilleStates.LOG_ERROR
+                return
 
             if self.container is None:
                 if self.request is None:
@@ -536,6 +531,9 @@ class Ratatouille:
             # debugging code to bypass dispensing
             self.request = None
             self.state = RatatouilleStates.HOME
+            ratatouille.__robot_go_to_joint_state(
+                ratatouille.known_poses["joint"]["home"]
+            )
             return
             # End debugging code to bypass dispensing
 
@@ -579,8 +577,10 @@ class Ratatouille:
 
             # Since dispensing is complete, clear user request
             self.request = None
-
             self.state = RatatouilleStates.HOME
+            ratatouille.__robot_go_to_joint_state(
+                ratatouille.known_poses["joint"]["home"]
+            )
 
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
 
@@ -778,6 +778,9 @@ class Ratatouille:
             print("(Press enter to continue): ", end="")
             input()
 
+    def reset_position(self):
+        self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
+
 
 if __name__ == "__main__":
     # start ROS node
@@ -852,6 +855,10 @@ if __name__ == "__main__":
         dispense_log_file=args.dispense_log_file,
         ingredient_quantity_log=args.ingredient_quantity_log,
     )
+
+    # reset robot position on start
+    print("Reset position to HOME.")
+    ratatouille.reset_position()
 
     # run state machine while ROS is running
     while not rospy.is_shutdown():
