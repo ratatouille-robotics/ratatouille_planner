@@ -742,7 +742,8 @@ class Ratatouille:
                     goal.orientation.z,
                     goal.orientation.w,
                 ],
-            )
+            ),
+            orient_tolerance=0.1,
         ):
             return False
 
