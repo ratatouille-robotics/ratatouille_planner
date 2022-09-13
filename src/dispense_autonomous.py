@@ -36,7 +36,8 @@ class Container:
     ingredient_id: int = None
     ingredient_name: str = None
     container_expected_pose: List[float] = None
-    container_pregrasp_pose: PoseStamped
+    container_pregrasp_pose: PoseStamped = None
+    container_observed_pose: List[float] = None
 
     def __init__(
         self,
@@ -44,11 +45,13 @@ class Container:
         ingredient_name: str,
         container_expected_pose: List[float],
         container_pregrasp_pose: PoseStamped,
+        container_observed_pose: List[float]
     ) -> None:
         self.ingredient_name = ingredient_name
         self.id = ingredient_id
         self.container_expected_pose = container_expected_pose
         self.container_pregrasp_pose = container_pregrasp_pose
+        self.container_observed_pose = container_observed_pose
 
 
 class DispensingRequest:
@@ -336,28 +339,6 @@ class Ratatouille:
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            # Compute actual container position from pre-grasp position
-            # Compute pose of container using fixed offset from the pre-grasp frame
-            # w.r.t base_link
-            pose_marker_wrist_frame = Pose()
-            pose_marker_wrist_frame.position.z = 0.175
-            pose_marker_wrist_frame.orientation.w = 1
-
-            pose_marker_base_frame = self.pose_transformer.transform_pose_to_frame(
-                pose_source=pose_marker_wrist_frame,
-                header_frame_id="wrist_3_link",
-                base_frame_id="base_link",
-            )
-
-            # correct gripper angling upward issue by adding pitch correction to tilt
-            # the gripper upward
-            pose_marker_base_frame.pose = self.__correct_gripper_angle_tilt(
-                pose_marker_base_frame.pose
-            )
-
-            # save actual container position to access later in PICK_CONTAINER state
-            self.container_observed_pose = pose_marker_base_frame.pose
-
             self.state = RatatouilleStates.VERIFY_INGREDIENT
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
@@ -412,6 +393,28 @@ class Ratatouille:
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
                 return
+
+            # Compute actual container position from pre-grasp position
+            # Compute pose of container using fixed offset from the pre-grasp frame
+            # w.r.t base_link
+            pose_marker_wrist_frame = Pose()
+            pose_marker_wrist_frame.position.z = 0.175
+            pose_marker_wrist_frame.orientation.w = 1
+
+            pose_marker_base_frame = self.pose_transformer.transform_pose_to_frame(
+                pose_source=pose_marker_wrist_frame,
+                header_frame_id="wrist_3_link",
+                base_frame_id="base_link",
+            )
+
+            # correct gripper angling upward issue by adding pitch correction to tilt
+            # the gripper upward
+            pose_marker_base_frame.pose = self.__correct_gripper_angle_tilt(
+                pose_marker_base_frame.pose
+            )
+
+            # save actual container position to access later in PICK_CONTAINER state
+            self.container_observed_pose = pose_marker_base_frame.pose
 
             # Move to container position
             self.log("Moving to pick container from actual container position")
@@ -612,7 +615,7 @@ class Ratatouille:
             #     return
 
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
-            self.container.container_expected_pose[2] = self.container.container_actual_pose[2]
+            self.container.container_expected_pose[2] = self.container.container_observed_pose.position.z
 
             # Move up a little to prevent container hitting the shelf
             self.log(
