@@ -48,9 +48,12 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> HOME
 
+    state has_container <<choice>>
     state has_request1 <<choice>>
 
-    HOME --> has_request1: False \n Is calibration complete?
+    HOME --> has_container: Has container?
+    has_container --> has_request1: False \n Is calibration complete?
+    has_container --> REPLACE_CONTAINER: True 
 
     has_request1 --> WRITE_CALIBRATION_DATA: True
     WRITE_CALIBRATION_DATA --> [*]
@@ -60,9 +63,9 @@ stateDiagram-v2
     VERIFY_INGREDIENT --> PICK_CONTAINER
     PICK_CONTAINER --> CHECK_QUANTITY
 
-    REPLACE_CONTAINER --> HOME
+    REPLACE_CONTAINER --> HOME: has_container = False
 
-    CHECK_QUANTITY --> REPLACE_CONTAINER
+    CHECK_QUANTITY --> HOME: has_container = True
 
     LOG_ERROR --> HOME: Reset error
 
