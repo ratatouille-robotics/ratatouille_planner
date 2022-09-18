@@ -534,12 +534,12 @@ class Ratatouille:
             )
 
             # debugging code to bypass dispensing
-            self.request = None
-            self.state = RatatouilleStates.HOME
-            ratatouille.__robot_go_to_joint_state(
-                ratatouille.known_poses["joint"]["home"]
-            )
-            return
+            # self.request = None
+            # self.state = RatatouilleStates.HOME
+            # ratatouille.__robot_go_to_joint_state(
+            #     ratatouille.known_poses["joint"]["home"]
+            # )
+            # return
             # End debugging code to bypass dispensing
 
             dispenser = Dispenser(self.robot_mg)
@@ -553,11 +553,11 @@ class Ratatouille:
                 f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request.quantity}] grams)"
             )
 
-            # update ingredient quantities
-            self.ingredient_quantities[
-                self.request.ingredient_name
-            ] -= actual_dispensed_quantity
-            self.log(f"Updated ingredient quantities : {self.ingredient_quantities}")
+            # # update ingredient quantities
+            # self.ingredient_quantities[
+            #     self.request.ingredient_name
+            # ] -= actual_dispensed_quantity
+            # self.log(f"Updated ingredient quantities : {self.ingredient_quantities}")
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
@@ -568,17 +568,17 @@ class Ratatouille:
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            # add entry to dispensing log file
-            with open(self.dispense_log_file, "a+") as dispense_log_file:
-                dispense_log_file.write(
-                    f"{datetime.now()} - [{self.request.ingredient_name}] - Expected: [{self.request.quantity}], Actual: [{actual_dispensed_quantity}], Error: [{dispense_error}]\n"
-                )
+            # # add entry to dispensing log file
+            # with open(self.dispense_log_file, "a+") as dispense_log_file:
+            #     dispense_log_file.write(
+            #         f"{datetime.now()} - [{self.request.ingredient_name}] - Expected: [{self.request.quantity}], Actual: [{actual_dispensed_quantity}], Error: [{dispense_error}]\n"
+            #     )
 
-            # add entry to dispensing log file
-            with open(self.ingredient_quantity_log, "w+") as dispense_log_file:
-                dispense_log_file.write(
-                    f"{datetime.now()}\n{self.ingredient_quantities}\n"
-                )
+            # # add entry to dispensing log file
+            # with open(self.ingredient_quantity_log, "w+") as dispense_log_file:
+            #     dispense_log_file.write(
+            #         f"{datetime.now()}\n{self.ingredient_quantities}\n"
+            #     )
 
             # Since dispensing is complete, clear user request
             self.request = None
