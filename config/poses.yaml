@@ -5,7 +5,7 @@ joint:
 cartesian:
   ingredients:
     - name: salt
-      id: 4
+      id: 7
     # - name: position-1
     #   id: 1
       # view_pose: [0.31, -0.485, 0.91, 0.7071068, 0.0, 0.0, 0.7071068]
