@@ -343,8 +343,8 @@ class Ratatouille:
 
         elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
             # Debugging code to bypass verfication
-            # self.state = RatatouilleStates.PICK_CONTAINER
-            # return
+            self.state = RatatouilleStates.PICK_CONTAINER
+            return
             # End debugging code to bypass verfication
 
             start_time = time.time()
@@ -467,32 +467,32 @@ class Ratatouille:
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            self.state = RatatouilleStates.CHECK_QUANTITY
+            self.state = RatatouilleStates.HOME
             # TODO-nevalsar: Remove
             # self.state = RatatouilleStates.REPLACE_CONTAINER
 
-        elif self.state == RatatouilleStates.CHECK_QUANTITY:
-            # TODO-nevalsar: Remove
-            # self.error_message = f"Insufficient quantity"
-            # self.state = RatatouilleStates.LOG_ERROR
-            # return
+        # elif self.state == RatatouilleStates.CHECK_QUANTITY:
+        #     # TODO-nevalsar: Remove
+        #     # self.error_message = f"Insufficient quantity"
+        #     # self.state = RatatouilleStates.LOG_ERROR
+        #     # return
 
-            self.log("Wait for weight estimate from force-torque sensor")
-            time.sleep(2)
-            weight_estimate: Float64 = rospy.wait_for_message(
-                "force_torque_weight", Float64, timeout=None
-            )
-            weight_estimate = weight_estimate.data * 1000
+        #     self.log("Wait for weight estimate from force-torque sensor")
+        #     time.sleep(2)
+        #     weight_estimate: Float64 = rospy.wait_for_message(
+        #         "force_torque_weight", Float64, timeout=None
+        #     )
+        #     weight_estimate = weight_estimate.data * 1000
 
-            self.log(f"Estimated weight: {weight_estimate}")
-            self.log(f"Requested weight: {self.request.quantity}")
+        #     self.log(f"Estimated weight: {weight_estimate}")
+        #     self.log(f"Requested weight: {self.request.quantity}")
 
-            # mark dispensing complete to replace container in shelf
-            if weight_estimate < self.request.quantity + _DISPENSE_THRESHOLD:
-                self.error_message = f"Insufficient quantity"
-                self.state = RatatouilleStates.LOG_ERROR
-            else:
-                self.state = RatatouilleStates.HOME
+        #     # mark dispensing complete to replace container in shelf
+        #     if weight_estimate < self.request.quantity + _DISPENSE_THRESHOLD:
+        #         self.error_message = f"Insufficient quantity"
+        #         self.state = RatatouilleStates.LOG_ERROR
+        #     else:
+        #         self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.DISPENSE:
             # # # TODO-nevalsar Remove

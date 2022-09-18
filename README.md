@@ -2,7 +2,7 @@
 
 ROS package that handles high-level planning for the Ratatouille ingredient dispensing system.
 
-## State Diagram
+## Dispense Flow State Diagram
 
 ```mermaid
 stateDiagram-v2
@@ -25,11 +25,10 @@ stateDiagram-v2
 
     SEARCH_MARKER --> VERIFY_INGREDIENT
     VERIFY_INGREDIENT --> PICK_CONTAINER
-    PICK_CONTAINER --> CHECK_QUANTITY: has_container = True
+    PICK_CONTAINER --> HOME: has_container = True
 
     REPLACE_CONTAINER --> HOME: has_container = False
 
-    CHECK_QUANTITY --> HOME
     DISPENSE --> HOME: has_request = False
 
     LOG_ERROR --> HOME: Reset error \n has_request = False
@@ -38,8 +37,40 @@ stateDiagram-v2
     SEARCH_MARKER --> LOG_ERROR: has_error = True
     VERIFY_INGREDIENT --> LOG_ERROR: has_error = True
     PICK_CONTAINER --> LOG_ERROR: has_error = True
-    CHECK_QUANTITY --> LOG_ERROR: has_error = True
     DISPENSE --> LOG_ERROR: has_error = True
+    REPLACE_CONTAINER --> LOG_ERROR: has_error = True
+
+```
+
+## Calibration Flow State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> HOME
+
+    state has_request1 <<choice>>
+
+    HOME --> has_request1: False \n Is calibration complete?
+
+    has_request1 --> WRITE_CALIBRATION_DATA: True
+    WRITE_CALIBRATION_DATA --> [*]
+    has_request1 --> SEARCH_NEXT_MARKER: False
+
+    SEARCH_NEXT_MARKER --> VERIFY_INGREDIENT
+    VERIFY_INGREDIENT --> PICK_CONTAINER
+    PICK_CONTAINER --> CHECK_QUANTITY
+
+    REPLACE_CONTAINER --> HOME
+
+    CHECK_QUANTITY --> REPLACE_CONTAINER
+
+    LOG_ERROR --> HOME: Reset error
+
+    
+    SEARCH_NEXT_MARKER --> LOG_ERROR: has_error = True
+    VERIFY_INGREDIENT --> LOG_ERROR: has_error = True
+    PICK_CONTAINER --> LOG_ERROR: has_error = True
+    CHECK_QUANTITY --> LOG_ERROR: has_error = True
     REPLACE_CONTAINER --> LOG_ERROR: has_error = True
 
 ```
