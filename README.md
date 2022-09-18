@@ -53,14 +53,14 @@ stateDiagram-v2
 
     HOME --> has_container: Has container?
     has_container --> has_request1: False \n Is calibration complete?
-    has_container --> REPLACE_CONTAINER: True 
+    has_container --> REPLACE_CONTAINER: True
 
     has_request1 --> WRITE_CALIBRATION_DATA: True
     WRITE_CALIBRATION_DATA --> [*]
-    has_request1 --> SEARCH_NEXT_MARKER: False
+    has_request1 --> VISIT_NEXT_CONTAINER: False
 
-    SEARCH_NEXT_MARKER --> VERIFY_INGREDIENT
-    VERIFY_INGREDIENT --> PICK_CONTAINER
+    VISIT_NEXT_CONTAINER --> LABEL_INGREDIENT
+    LABEL_INGREDIENT --> PICK_CONTAINER
     PICK_CONTAINER --> CHECK_QUANTITY
 
     REPLACE_CONTAINER --> HOME: has_container = False
@@ -70,8 +70,8 @@ stateDiagram-v2
     LOG_ERROR --> HOME: Reset error
 
     
-    SEARCH_NEXT_MARKER --> LOG_ERROR: has_error = True
-    VERIFY_INGREDIENT --> LOG_ERROR: has_error = True
+    VISIT_NEXT_CONTAINER --> LOG_ERROR: has_error = True
+    LABEL_INGREDIENT --> LOG_ERROR: has_error = True
     PICK_CONTAINER --> LOG_ERROR: has_error = True
     CHECK_QUANTITY --> LOG_ERROR: has_error = True
     REPLACE_CONTAINER --> LOG_ERROR: has_error = True
