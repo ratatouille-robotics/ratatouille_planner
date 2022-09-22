@@ -55,15 +55,16 @@ stateDiagram-v2
     has_container --> has_request1: False \n Is calibration complete?
     has_container --> REPLACE_CONTAINER: True
 
-    has_request1 --> WRITE_CALIBRATION_DATA: True
-    WRITE_CALIBRATION_DATA --> [*]
+    has_request1 --> STOP: True
+    STOP--> [*]
     has_request1 --> VISIT_NEXT_CONTAINER: False
 
     VISIT_NEXT_CONTAINER --> LABEL_INGREDIENT
     LABEL_INGREDIENT --> PICK_CONTAINER
     PICK_CONTAINER --> CHECK_QUANTITY
 
-    REPLACE_CONTAINER --> HOME: has_container = False
+    REPLACE_CONTAINER --> WRITE_CALIBRATION_DATA: has_container = False
+    WRITE_CALIBRATION_DATA --> HOME
 
     CHECK_QUANTITY --> HOME: has_container = True
 

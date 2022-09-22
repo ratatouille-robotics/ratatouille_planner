@@ -22,6 +22,9 @@ from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
 
+_CALIBRATION_START_CONTAINER = 1
+_CALIBRATION_END_CONTAINER = 15
+
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
 _DISPENSE_THRESHOLD = 50
@@ -37,11 +40,13 @@ _INVENTORY_FILE_PATH = "inventory.yaml"
 # - all containers should be present, no empty positions without container
 # - all containers are of same height, limited by UR5e arm reach (software fully supports it)
 
+
 class IngredientType(Enum):
     SALT = (auto(),)
     SUGAR = (auto(),)
     NO_INGREDIENT = auto()
     NO_CONTAINER = auto()
+
 
 class Container(yaml.YAMLObject):
     yaml_tag = "!container"
@@ -51,20 +56,29 @@ class Container(yaml.YAMLObject):
     def __init__(self, _name: str, _quantity: float):
         self.name = _name
         self.quantity = _quantity
-    
+
     def __repr__(self) -> str:
         return f"name: {self.name}, quantity: {self.quantity}"
 
-yaml.add_path_resolver('!container', ['Container'], dict)
+
+yaml.add_path_resolver("!container", ["Container"], dict)
+
 
 class Shelf(yaml.YAMLObject):
     yaml_tag = "!shelf"
     positions: Dict[int, Container] = None
 
     def __init__(self):
-        self.positions = {key: None for key in range(8, 10+1)}
+        self.positions = {
+            key: None
+            for key in range(
+                _CALIBRATION_START_CONTAINER, _CALIBRATION_END_CONTAINER + 1
+            )
+        }
 
-yaml.add_path_resolver('!shelf', ['Shelf'], dict)
+
+yaml.add_path_resolver("!shelf", ["Shelf"], dict)
+
 
 class RatatouilleStates(Enum):
     HOME = auto()
@@ -126,7 +140,7 @@ class Ratatouille:
         self.verbose = verbose
         self.stop_and_proceed = stop_and_proceed
         self.disable_external_input = disable_external_input
-        
+
         with open(
             file=os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH),
             mode="r",
@@ -213,7 +227,7 @@ class Ratatouille:
                 self.state = RatatouilleStates.REPLACE_CONTAINER
             elif self.__get_next_ingredient_position() == -1:
                 # calibration complete, all shelf positions have been populated
-                self.state = RatatouilleStates.WRITE_CALIBRATION_DATA
+                self.state = RatatouilleStates.STOP
             else:
                 self.ingredient_id = self.__get_next_ingredient_position()
                 print(f"Self ingredient id {self.ingredient_id}")
@@ -228,13 +242,19 @@ class Ratatouille:
 
         elif self.state == RatatouilleStates.WRITE_CALIBRATION_DATA:
             print(f"Writing calibration data...")
-            
+
             print(self.calibration_data.positions)
-            
-            with open(os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w") as _temp:
-                documents = yaml.dump(self.calibration_data.positions, _temp)
-            
-            self.state = RatatouilleStates.STOP
+
+            # skip writing null values
+            _temp_data = {k: v for k,v in self.calibration_data.positions.items() if v}
+
+            with open(
+                os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w"
+            ) as _temp:
+                documents = yaml.dump(_temp_data, _temp)
+                print(documents)
+
+            self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.VISIT_NEXT_CONTAINER:
             # Move to ingredient view position
@@ -517,7 +537,7 @@ class Ratatouille:
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            self.state = RatatouilleStates.HOME
+            self.state = RatatouilleStates.WRITE_CALIBRATION_DATA
 
         elif self.state == RatatouilleStates.LOG_ERROR:
             rospy.logerr(self.error_message)
