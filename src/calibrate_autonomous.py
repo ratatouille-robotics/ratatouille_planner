@@ -11,7 +11,7 @@ from tf.transformations import *
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64, String
-from typing import List
+from typing import Dict, List
 import time
 from datetime import datetime
 
@@ -30,6 +30,7 @@ _MARKER_DETECTION_TIMEOUT_SECONDS = 5
 _OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
+_INVENTORY_FILE_PATH = "inventory.yaml"
 
 # ASSUMPTIONS
 # - all markers should be at correct positions (eg. marker 1 at position 1)
@@ -37,17 +38,33 @@ _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 # - all containers are of same height, limited by UR5e arm reach (software fully supports it)
 
 class IngredientType(Enum):
-    SALT = auto(),
-    SUGAR = auto(),
+    SALT = (auto(),)
+    SUGAR = (auto(),)
     NO_INGREDIENT = auto()
     NO_CONTAINER = auto()
 
+class Container(yaml.YAMLObject):
+    yaml_tag = "!container"
+    name: str = None
+    quantity: float = None
 
-class Shelf:
-    positions: List[int] = None
+    def __init__(self, _name: str, _quantity: float):
+        self.name = _name
+        self.quantity = _quantity
+    
+    def __repr__(self) -> str:
+        return f"name: {self.name}, quantity: {self.quantity}"
+
+yaml.add_path_resolver('!container', ['Container'], dict)
+
+class Shelf(yaml.YAMLObject):
+    yaml_tag = "!shelf"
+    positions: Dict[int, Container] = None
 
     def __init__(self):
-        self.positions = {key: None for key in range(1, 16)}
+        self.positions = {key: None for key in range(8, 10+1)}
+
+yaml.add_path_resolver('!shelf', ['Shelf'], dict)
 
 class RatatouilleStates(Enum):
     HOME = auto()
@@ -101,12 +118,23 @@ class Ratatouille:
         debug_mode: bool = False,
         disable_external_input: bool = False,
     ) -> None:
+        self.config_dir_path = config_dir_path
+
         # initialize flags
         self.debug_mode = debug_mode
         self.disable_gripper = disable_gripper
         self.verbose = verbose
         self.stop_and_proceed = stop_and_proceed
         self.disable_external_input = disable_external_input
+        
+        with open(
+            file=os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH),
+            mode="r",
+        ) as _temp:
+            _inventory = yaml.load(_temp)
+            print(f"Inventory: {_inventory}")
+            for key in _inventory:
+                self.calibration_data.positions[key] = _inventory[key]
 
         # initialize dependencies
         if not self.debug_mode:
@@ -155,6 +183,7 @@ class Ratatouille:
         self.ingredient_quantity_log = ingredient_quantity_log
 
     def __get_next_ingredient_position(self) -> int:
+        print(f"Calibration: {self.calibration_data.positions}")
         for key in self.calibration_data.positions:
             if self.calibration_data.positions[key] is None:
                 return key
@@ -198,11 +227,14 @@ class Ratatouille:
                 self.state = RatatouilleStates.VISIT_NEXT_CONTAINER
 
         elif self.state == RatatouilleStates.WRITE_CALIBRATION_DATA:
-            print(
-                f"Ingredient details: \ntype: [{self.ingredient_name}], \nquantity: [{self.ingredient_quantity}]"
-            )
+            print(f"Writing calibration data...")
+            
+            print(self.calibration_data.positions)
+            
+            with open(os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w") as _temp:
+                documents = yaml.dump(self.calibration_data.positions, _temp)
+            
             self.state = RatatouilleStates.STOP
-            print("DONE")
 
         elif self.state == RatatouilleStates.VISIT_NEXT_CONTAINER:
             # Move to ingredient view position
@@ -413,7 +445,7 @@ class Ratatouille:
             # self.ingredient_quantity = self.ingredient_quantity.data * 1000
 
             self.log(f"Estimated weight: {self.ingredient_quantity}")
-            
+
             self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
             self.state = RatatouilleStates.HOME
@@ -421,7 +453,10 @@ class Ratatouille:
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
 
             # write data
-            self.calibration_data.positions[self.ingredient_id] = (self.ingredient_name, self.ingredient_quantity)
+            self.calibration_data.positions[self.ingredient_id] = Container(
+                self.ingredient_name,
+                self.ingredient_quantity,
+            )
 
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
             self.ingredient_position[2] = self.ingredient_actual_position.position.z
@@ -673,6 +708,6 @@ if __name__ == "__main__":
     ratatouille.reset_position()
 
     # run state machine while ROS is running
-    while not rospy.is_shutdown() and Ratatouille.state != RatatouilleStates.STOP:
+    while not rospy.is_shutdown() and ratatouille.state != RatatouilleStates.STOP:
         ratatouille.run()
         ros_rate.sleep()
