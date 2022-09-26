@@ -37,7 +37,6 @@ _INVENTORY_FILE_PATH = "inventory.yaml"
 
 # ASSUMPTIONS
 # - all markers should be at correct positions (eg. marker 1 at position 1)
-# - all containers should be present, no empty positions without container
 # - all containers are of same height, limited by UR5e arm reach (software fully supports it)
 
 
@@ -356,6 +355,11 @@ class Ratatouille:
                 self.ingredient_name = IngredientType(response.found_ingredient.lower())
                 self.log(f"Found [{self.ingredient_name}]")
                 self.state = RatatouilleStates.PICK_CONTAINER
+
+                if self.ingredient_name == IngredientType.NO_INGREDIENT:
+                    self.ingredient_quantity = 0
+                    self.state = RatatouilleStates.HOME
+
             except ValueError:
                 self.error_message = (
                     f"Cannot parse detected ingredient {response.found_ingredient}"

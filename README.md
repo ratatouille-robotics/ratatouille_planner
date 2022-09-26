@@ -52,6 +52,7 @@ stateDiagram-v2
     state has_container <<choice>>
     state has_request1 <<choice>>
     state container_detected <<choice>>
+    state ingredient_missing <<choice>>
 
     
     HOME --> has_container: Has container?
@@ -65,7 +66,9 @@ stateDiagram-v2
     VISIT_NEXT_CONTAINER --> container_detected: Container detected?
     container_detected --> LABEL_INGREDIENT: True
     container_detected --> WRITE_CALIBRATION_DATA: False
-    LABEL_INGREDIENT --> PICK_CONTAINER
+    LABEL_INGREDIENT --> ingredient_missing: Ingredient missing?
+    ingredient_missing --> HOME: True
+    ingredient_missing --> PICK_CONTAINER: False
     PICK_CONTAINER --> CHECK_QUANTITY
 
     REPLACE_CONTAINER --> WRITE_CALIBRATION_DATA: has_container = False
