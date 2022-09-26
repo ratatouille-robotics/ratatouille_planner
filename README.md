@@ -47,19 +47,24 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> HOME
+    STOP--> [*]
 
     state has_container <<choice>>
     state has_request1 <<choice>>
+    state container_detected <<choice>>
 
+    
     HOME --> has_container: Has container?
     has_container --> has_request1: False \n Is calibration complete?
     has_container --> REPLACE_CONTAINER: True
 
     has_request1 --> STOP: True
-    STOP--> [*]
+    
     has_request1 --> VISIT_NEXT_CONTAINER: False
 
-    VISIT_NEXT_CONTAINER --> LABEL_INGREDIENT
+    VISIT_NEXT_CONTAINER --> container_detected: Container detected?
+    container_detected --> LABEL_INGREDIENT: True
+    container_detected --> WRITE_CALIBRATION_DATA: False
     LABEL_INGREDIENT --> PICK_CONTAINER
     PICK_CONTAINER --> CHECK_QUANTITY
 

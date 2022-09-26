@@ -41,11 +41,15 @@ _INVENTORY_FILE_PATH = "inventory.yaml"
 # - all containers are of same height, limited by UR5e arm reach (software fully supports it)
 
 
-class IngredientType(Enum):
-    SALT = (auto(),)
-    SUGAR = (auto(),)
-    NO_INGREDIENT = auto()
-    NO_CONTAINER = auto()
+class IngredientType(str, Enum):
+    SALT = "salt"
+    SUGAR = "sugar"
+    VINEGAR = "vinegar"
+    NO_INGREDIENT = "no_ingredient"
+    NO_CONTAINER = "no_container"
+
+    def __str__(self) -> str:
+        return str.__str__(self)
 
 
 class Container(yaml.YAMLObject):
@@ -53,8 +57,8 @@ class Container(yaml.YAMLObject):
     name: str = None
     quantity: float = None
 
-    def __init__(self, _name: str, _quantity: float):
-        self.name = _name
+    def __init__(self, _name: IngredientType, _quantity: float):
+        self.name = str(_name)
         self.quantity = _quantity
 
     def __repr__(self) -> str:
@@ -241,12 +245,18 @@ class Ratatouille:
                 self.state = RatatouilleStates.VISIT_NEXT_CONTAINER
 
         elif self.state == RatatouilleStates.WRITE_CALIBRATION_DATA:
-            print(f"Writing calibration data...")
 
+            # write data
+            self.calibration_data.positions[self.ingredient_id] = Container(
+                self.ingredient_name,
+                self.ingredient_quantity,
+            )
+
+            print(f"Writing calibration data...")
             print(self.calibration_data.positions)
 
             # skip writing null values
-            _temp_data = {k: v for k,v in self.calibration_data.positions.items() if v}
+            _temp_data = {k: v for k, v in self.calibration_data.positions.items() if v}
 
             with open(
                 os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w"
@@ -309,12 +319,15 @@ class Ratatouille:
                     is_marker_detected = True
                     break
 
-            if not is_marker_detected:
-                self.error_message = f"Unable to find ingredient marker."
-                self.state = RatatouilleStates.LOG_ERROR
-                return
-
-            self.state = RatatouilleStates.LABEL_INGREDIENT
+            if is_marker_detected:
+                self.state = RatatouilleStates.LABEL_INGREDIENT
+            else:
+                # self.error_message = f"Unable to find ingredient marker."
+                # self.state = RatatouilleStates.LOG_ERROR
+                # return
+                self.ingredient_name = IngredientType.NO_CONTAINER
+                self.ingredient_quantity = 0
+                self.state = RatatouilleStates.WRITE_CALIBRATION_DATA
 
         elif self.state == RatatouilleStates.LABEL_INGREDIENT:
             # Debugging code to bypass verfication
@@ -330,15 +343,27 @@ class Ratatouille:
                     "ingredient_validation", ValidateIngredient
                 )
                 response = service_call()
-                self.ingredient_name = response.found_ingredient.lower()
+
             except rospy.ServiceException as e:
                 self.error_message = (
                     f"Ingredient detection service call failed. Error: {e}"
                 )
                 self.state = RatatouilleStates.LOG_ERROR
 
-            self.log(f"Found [{self.ingredient_name}]")
-            self.state = RatatouilleStates.PICK_CONTAINER
+            print(f"Service Response: {response.found_ingredient.lower()}")
+
+            try:
+                self.ingredient_name = IngredientType(response.found_ingredient.lower())
+                self.log(f"Found [{self.ingredient_name}]")
+                self.state = RatatouilleStates.PICK_CONTAINER
+            except ValueError:
+                self.error_message = (
+                    f"Cannot parse detected ingredient {response.found_ingredient}"
+                )
+                self.state = RatatouilleStates.LOG_ERROR
+            
+
+            
 
         elif self.state == RatatouilleStates.PICK_CONTAINER:
             self.log("Opening gripper")
@@ -471,12 +496,6 @@ class Ratatouille:
             self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
-
-            # write data
-            self.calibration_data.positions[self.ingredient_id] = Container(
-                self.ingredient_name,
-                self.ingredient_quantity,
-            )
 
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
             self.ingredient_position[2] = self.ingredient_actual_position.position.z
