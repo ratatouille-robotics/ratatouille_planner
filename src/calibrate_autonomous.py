@@ -223,6 +223,7 @@ class Ratatouille:
                 reverse=True,
             ):
                 self.error_message = "Unable to move to joint state"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -282,6 +283,7 @@ class Ratatouille:
                 acceleration_scaling_factor=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -322,6 +324,7 @@ class Ratatouille:
                 self.state = RatatouilleStates.LABEL_INGREDIENT
             else:
                 # self.error_message = f"Unable to find ingredient marker."
+                self.error_state = self.state
                 # self.state = RatatouilleStates.LOG_ERROR
                 # return
                 self.ingredient_name = IngredientType.NO_CONTAINER
@@ -347,6 +350,7 @@ class Ratatouille:
                 self.error_message = (
                     f"Ingredient detection service call failed. Error: {e}"
                 )
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
 
             print(f"Service Response: {response.found_ingredient.lower()}")
@@ -364,6 +368,7 @@ class Ratatouille:
                 self.error_message = (
                     f"Cannot parse detected ingredient {response.found_ingredient}"
                 )
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
             
 
@@ -379,6 +384,7 @@ class Ratatouille:
                 pose=self.container_pregrasp_pose.pose, acc_scaling=0.1
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -410,6 +416,7 @@ class Ratatouille:
                 pose=self.ingredient_actual_position, acc_scaling=0.05
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -432,6 +439,7 @@ class Ratatouille:
             temp_pose = self.__correct_gripper_angle_tilt(temp_pose)
             if not self.__robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -445,18 +453,20 @@ class Ratatouille:
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
             self.state = RatatouilleStates.CHECK_QUANTITY
 
         elif self.state == RatatouilleStates.CHECK_QUANTITY:
-
+            
             self.log("Moving to pre-sense position")
             if not self.__robot_go_to_joint_state(
                 self.known_poses["joint"]["pre_sense"]
             ):
                 self.error_message = "Unable to move to joint state"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -469,6 +479,7 @@ class Ratatouille:
                 orient_tolerance=0.05,
             ):
                 self.error_message = "Unable to move to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -483,6 +494,7 @@ class Ratatouille:
                 self.known_poses["joint"]["pre_sense"]
             ):
                 self.error_message = "Unable to move to joint state"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -519,6 +531,7 @@ class Ratatouille:
                 acceleration_scaling_factor=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -537,6 +550,7 @@ class Ratatouille:
                 )
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
@@ -557,16 +571,20 @@ class Ratatouille:
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
             self.state = RatatouilleStates.WRITE_CALIBRATION_DATA
 
         elif self.state == RatatouilleStates.LOG_ERROR:
+            if self.error_state == RatatouilleStates.CHECK_QUANTITY:
+                exit(0)
             rospy.logerr(self.error_message)
             rospy.logwarn("Press any key to reset.")
             input()
             # reset user request after error
+            self.error_state = None
             self.error_message = None
             self.request = None
             self.state = RatatouilleStates.HOME
