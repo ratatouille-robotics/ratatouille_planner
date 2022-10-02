@@ -22,7 +22,7 @@ from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
 
-_CALIBRATION_START_CONTAINER = 1
+_CALIBRATION_START_CONTAINER = 12
 _CALIBRATION_END_CONTAINER = 15
 
 _ROS_RATE = 10.0
@@ -150,8 +150,9 @@ class Ratatouille:
         ) as _temp:
             _inventory = yaml.load(_temp)
             print(f"Inventory: {_inventory}")
-            for key in _inventory:
-                self.calibration_data.positions[key] = _inventory[key]
+            if _inventory:
+                for key in _inventory:
+                    self.calibration_data.positions[key] = _inventory[key]
 
         # initialize dependencies
         if not self.debug_mode:
@@ -460,6 +461,12 @@ class Ratatouille:
             self.state = RatatouilleStates.CHECK_QUANTITY
 
         elif self.state == RatatouilleStates.CHECK_QUANTITY:
+
+            # bypass sensing
+            # self.ingredient_quantity = 100
+            # self.state = RatatouilleStates.HOME
+            # return
+            # end bypass sensing
             
             self.log("Moving to pre-sense position")
             if not self.__robot_go_to_joint_state(
@@ -482,6 +489,9 @@ class Ratatouille:
                 self.error_state = self.state
                 self.state = RatatouilleStates.LOG_ERROR
                 return
+
+            # wait before opening gripper 
+            # time.sleep(5);
 
             self.__robot_open_gripper(wait=True)
 
@@ -514,7 +524,7 @@ class Ratatouille:
         elif self.state == RatatouilleStates.REPLACE_CONTAINER:
 
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
-            self.ingredient_position[2] = self.ingredient_actual_position.position.z
+            self.ingredient_position["view_pose"][2] = self.ingredient_actual_position.position.z
 
             # Move up a little to prevent container hitting the shelf
             self.log(
