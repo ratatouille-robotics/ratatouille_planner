@@ -45,7 +45,7 @@ class Container:
         ingredient_name: str,
         container_expected_pose: List[float],
         container_pregrasp_pose: PoseStamped,
-        container_observed_pose: List[float]
+        container_observed_pose: List[float],
     ) -> None:
         self.ingredient_name = ingredient_name
         self.id = ingredient_id
@@ -502,32 +502,51 @@ class Ratatouille:
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
-            if not self.__robot_go_to_joint_state(
-                self.known_poses["joint"]["pre_dispense"]
+            if not self.robot_mg.go_to_joint_state(
+                self.known_poses["joint"]["pre_dispense"],
+                cartesian_path=False,
+                velocity_scaling=0.15,
+            ):
+                self.error_message = "Unable to move to joint state"
+                self.state = RatatouilleStates.LOG_ERROR
+                return
+            if not self.robot_mg.go_to_joint_state(
+                self.known_poses["joint"]["pre_dispense"],
+                cartesian_path=True,
+                velocity_scaling=0.15,
             ):
                 self.error_message = "Unable to move to joint state"
                 self.state = RatatouilleStates.LOG_ERROR
                 return
 
-            # Move to dispense position
-            self.log(
-                f"Moving to dispensing position for ingredient [{self.request.ingredient_name}]"
-            )
+            # # Move to dispense position
+            # self.log(
+            #     f"Moving to dispensing position for ingredient [{self.request.ingredient_name}]"
+            # )
             dispensing_params = self.pouring_characteristics[
                 self.request.ingredient_name
             ]
-            _temp = self.known_poses["cartesian"]["pouring"][
-                dispensing_params["container"]
-            ][dispensing_params["pouring_position"]]
-            if not self.__robot_go_to_pose_goal(
-                make_pose(_temp[:3], _temp[3:]),
-                orient_tolerance=0.05,
-                velocity_scaling=0.15,
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
-                return
-
+            # _temp = self.known_poses["cartesian"]["pouring"][
+            #     dispensing_params["container"]
+            # ][dispensing_params["pouring_position"]]
+            # pre_dispense_pose = make_pose(_temp[:3], _temp[3:])
+            # rospy.loginfo(pre_dispense_pose)
+            # if not self.__robot_go_to_pose_goal(
+            #     pre_dispense_pose,
+            #     orient_tolerance=0.5,
+            #     cartesian_path=True,
+            #     velocity_scaling=0.3,
+            # ):
+            #     self.error_message = "Error moving to pose goal"
+            #     self.state = RatatouilleStates.LOG_ERROR
+            #     return
+                
+            # assert self.robot_mg.go_to_pose_goal(
+            #     pre_dispense_pose,
+            #     cartesian_path=True,
+            #     orient_tolerance=0.05,
+            #     velocity_scaling=0.3,
+            # )
             # Dispense ingredient
             self.log(
                 f"Dispensing [{self.request.quantity}] grams of [{self.request.ingredient_name}]"
@@ -553,22 +572,22 @@ class Ratatouille:
                 f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request.quantity}] grams)"
             )
 
-            # # update ingredient quantities
+            # update ingredient quantities
             # self.ingredient_quantities[
             #     self.request.ingredient_name
             # ] -= actual_dispensed_quantity
             # self.log(f"Updated ingredient quantities : {self.ingredient_quantities}")
 
-            # Move to pre-dispense position
-            self.log("Moving to pre-dispense position")
-            if not self.__robot_go_to_joint_state(
-                self.known_poses["joint"]["pre_dispense"]
-            ):
-                self.error_message = "Unable to move to joint state"
-                self.state = RatatouilleStates.LOG_ERROR
-                return
+            # # Move to pre-dispense position
+            # self.log("Moving to pre-dispense position")
+            # if not self.__robot_go_to_joint_state(
+            #     self.known_poses["joint"]["pre_dispense"]
+            # ):
+            #     self.error_message = "Unable to move to joint state"
+            #     self.state = RatatouilleStates.LOG_ERROR
+            #     return
 
-            # # add entry to dispensing log file
+            # add entry to dispensing log file
             # with open(self.dispense_log_file, "a+") as dispense_log_file:
             #     dispense_log_file.write(
             #         f"{datetime.now()} - [{self.request.ingredient_name}] - Expected: [{self.request.quantity}], Actual: [{actual_dispensed_quantity}], Error: [{dispense_error}]\n"
@@ -615,7 +634,9 @@ class Ratatouille:
             #     return
 
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
-            self.container.container_expected_pose[2] = self.container.container_observed_pose.position.z
+            self.container.container_expected_pose[
+                2
+            ] = self.container.container_observed_pose.position.z
 
             # Move up a little to prevent container hitting the shelf
             self.log(
@@ -699,7 +720,12 @@ class Ratatouille:
             return self.robot_mg.go_to_joint_state(pose)
 
     def __robot_go_to_pose_goal(
-        self, pose, acc_scaling=0.2, velocity_scaling=0.2, orient_tolerance=0.01
+        self,
+        pose,
+        acc_scaling=0.2,
+        velocity_scaling=0.2,
+        orient_tolerance=0.01,
+        cartesian_path=True,
     ):
         if not self.debug_mode:
             return self.robot_mg.go_to_pose_goal(
@@ -707,6 +733,7 @@ class Ratatouille:
                 acc_scaling=acc_scaling,
                 velocity_scaling=velocity_scaling,
                 orient_tolerance=orient_tolerance,
+                cartesian_path=cartesian_path,
             )
 
     def __correct_gripper_angle_tilt(self, pose: Pose, reverse: bool = False) -> Pose:

@@ -1,10 +1,10 @@
-name: salt
-tolerance: 0.3
-container: powder
+name: green_chillies
+tolerance: 10.0
+container: regular
 pouring_position: corner
 controller:
-  type: logical
-  error_threshold: 0.25
+  type: pd
+  error_threshold: 6.0
   p_gain: 0.0025
   d_gain: 0.02
   acc_scaling: 1
@@ -13,6 +13,6 @@ controller:
   shaking: True
   trans_shake_params:
     axis: [1, 0, 0]
-    amplitude: 0.005
-    frequency: 4
-    pattern: [1, 0, 0, 0]
+    amplitude: 0.0075
+    frequency: 2.5
+    pattern: [1]

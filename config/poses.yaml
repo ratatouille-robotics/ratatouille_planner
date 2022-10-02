@@ -6,39 +6,39 @@ cartesian:
   ingredients:
     # - name: salt
     #   id: 7
-    - name: position-1
+    - name: sunflower_oil
       id: 1
       view_pose: [0.31, -0.485, 0.91, 0.7071068, 0.0, 0.0, 0.7071068]
-    - name: position-2
+    - name: mustard_seeds
       id: 2
       view_pose: [0.16, -0.485, 0.91, 0.7071068, 0.0, 0.0, 0.7071068]
-    - name: position-3
+    - name: cumin_seeds
       id: 3
       view_pose: [0.01, -0.485, 0.91, 0.7071068, 0.0, 0.0, 0.7071068]
-    - name: position-4
+    - name: peanuts
       id: 4
       view_pose: [-0.14, -0.485, 0.91, 0.7071068, 0.0, 0.0, 0.7071068]
     - name: water
       id: 5
       view_pose: [-0.29, -0.485, 0.91, 0.7071068, 0.0, 0.0, 0.7071068]
     
-    - name: position-6
+    - name: onion
       id: 6
       view_pose: [0.31, -0.485, 0.665, 0.7071068, 0.0, 0.0, 0.7071068]
-    - name: position-7
+    - name: green_chillies
       id: 7
       view_pose: [0.16, -0.485, 0.665, 0.7071068, 0.0, 0.0, 0.7071068]
-    - name: maggi-masala
+    - name: poha_thick
       id: 8
       view_pose: [0.01, -0.485, 0.665, 0.7071068, 0.0, 0.0, 0.7071068]
-    - name: position-9
+    - name: salt
       id: 9
       view_pose: [-0.14, -0.485, 0.665, 0.7071068, 0.0, 0.0, 0.7071068]
     - name: noodle
       id: 10
       view_pose: [-0.29, -0.485, 0.665, 0.7071068, 0.0, 0.0, 0.7071068]
 
-    - name: position-11
+    - name: turmeric
       id: 11
       view_pose: [0.31, -0.485, 0.42, 0.7071068, 0.0, 0.0, 0.7071068]
     - name: position-12
@@ -60,8 +60,11 @@ cartesian:
   pouring:
     regular:
       corner: [-0.300, -0.030, 0.510, 0.671, -0.613, -0.414, 0.048]
+      # corner: [-0.300, -0.030, 0.510, 0.8, -0.4, -0.2, 0.038]
       edge: [-0.385, 0.240, 0.510, 0.910, -0.324, -0.109, 0.235]
     liquid:
-      corner: [-0.265, -0.03, 0.510, 0.633, -0.645, -0.421, 0.082]
+      corner: [-0.265, -0.03, 0.0460, 0.633, -0.645, -0.421, 0.082]
+    powder:
+      corner: [-0.390, 0.100, 0.520, 0.749, 0.342, -0.520, -0.228]
 
 

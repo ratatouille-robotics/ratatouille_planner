@@ -4,7 +4,7 @@ container: regular
 pouring_position: corner
 controller:
   type: pd
-  error_threshold: 8.0
+  error_threshold: 6.0
   p_gain: 0.0025
   d_gain: 0.02
   acc_scaling: 1
