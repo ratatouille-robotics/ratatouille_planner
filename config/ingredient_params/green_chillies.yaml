@@ -1,5 +1,5 @@
 name: green_chillies
-tolerance: 10.0
+tolerance: 1.0
 container: regular
 pouring_position: corner
 controller:

@@ -1,12 +1,12 @@
 name: mustard_seeds
-tolerance: 5.0
+tolerance: 1.0
 container: regular
 pouring_position: corner
 controller:
   type: pd
   error_threshold: 3.0
-  p_gain: 0.0025
-  d_gain: 0.02
+  p_gain: 0.025
+  d_gain: 0.05
   acc_scaling: 1
   vel_scaling: 1
   rot_axis: [0.7071, 0, -0.7071]
