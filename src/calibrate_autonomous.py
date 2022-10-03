@@ -117,7 +117,6 @@ class Ratatouille:
     # state variables
     state: RatatouilleStates = None
     error_message: str = None
-    ingredient_quantities: dict = None
     calibration_data = Shelf()
 
     # log files
@@ -128,7 +127,6 @@ class Ratatouille:
         state: RatatouilleStates,
         config_dir_path: str,
         dispense_log_file: str,
-        ingredient_quantity_log: str,
         disable_gripper: bool = False,
         verbose: bool = False,
         stop_and_proceed: bool = False,
@@ -157,12 +155,6 @@ class Ratatouille:
         # initialize dependencies
         if not self.debug_mode:
             self.robot_mg = RobotMoveGroup()
-
-        with open(
-            file=os.path.join(config_dir_path, "ingredient_quantities.yaml"),
-            mode="r",
-        ) as _temp:
-            self.ingredient_quantities = yaml.safe_load(_temp)
 
         with open(
             file=os.path.join(config_dir_path, "poses.yaml"),
@@ -198,7 +190,6 @@ class Ratatouille:
 
         # initialize log file paths
         self.dispense_log_file = dispense_log_file
-        self.ingredient_quantity_log = ingredient_quantity_log
 
     def __get_next_ingredient_position(self) -> int:
         print(f"Calibration: {self.calibration_data.positions}")
@@ -214,7 +205,6 @@ class Ratatouille:
 
         if self.state == RatatouilleStates.HOME:
             self.log(f"Moving to home")
-            # if not self.__robot_go_to_joint_state(self.known_poses["joint"]["home"]):
             if not self.__go_to_pose_cartesian_order(
                 make_pose(
                     self.known_poses["cartesian"]["home"][:3],
@@ -750,14 +740,6 @@ if __name__ == "__main__":
             package_path, "logs", "dispense_history.log"
         )
         temp_dir = os.path.dirname(args.dispense_log_file)
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-
-    if args.ingredient_quantity_log is None:
-        args.ingredient_quantity_log = os.path.join(
-            package_path, "logs", "ingredient_quantities.log"
-        )
-        temp_dir = os.path.dirname(args.ingredient_quantity_log)
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
 

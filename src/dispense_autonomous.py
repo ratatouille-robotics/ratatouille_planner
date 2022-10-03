@@ -82,7 +82,6 @@ class RatatouilleStates(Enum):
     SEARCH_MARKER = auto()
     VERIFY_INGREDIENT = auto()
     PICK_CONTAINER = auto()
-    CHECK_QUANTITY = auto()
     DISPENSE = auto()
     REPLACE_CONTAINER = auto()
     LOG_ERROR = auto()
@@ -276,13 +275,6 @@ class Ratatouille:
             self.log(
                 f"Moving to ingredient view position for [{self.request.ingredient_name}]"
             )
-            # if not self.__robot_go_to_pose_goal(
-            #     pose=make_pose(
-            #         self.request.container_expected_pose[:3],
-            #         self.request.container_expected_pose[3:],
-            #     ),
-            #     acc_scaling=0.1,
-            # )
             if not self.__go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
@@ -293,10 +285,6 @@ class Ratatouille:
                 ),
                 acceleration_scaling_factor=0.1,
             ):
-                # if not self.__robot_go_to_pose_goal(
-                #     offset_pose(self.robot_mg.get_current_pose(), _OFFSET_CONTAINER_VIEW),
-                #     acc_scaling=0.1,
-                # ):
                 self.error_message = "Error moving to pose goal"
                 self.state = RatatouilleStates.LOG_ERROR
                 return
@@ -468,31 +456,6 @@ class Ratatouille:
                 return
 
             self.state = RatatouilleStates.HOME
-            # TODO-nevalsar: Remove
-            # self.state = RatatouilleStates.REPLACE_CONTAINER
-
-        # elif self.state == RatatouilleStates.CHECK_QUANTITY:
-        #     # TODO-nevalsar: Remove
-        #     # self.error_message = f"Insufficient quantity"
-        #     # self.state = RatatouilleStates.LOG_ERROR
-        #     # return
-
-        #     self.log("Wait for weight estimate from force-torque sensor")
-        #     time.sleep(2)
-        #     weight_estimate: Float64 = rospy.wait_for_message(
-        #         "force_torque_weight", Float64, timeout=None
-        #     )
-        #     weight_estimate = weight_estimate.data * 1000
-
-        #     self.log(f"Estimated weight: {weight_estimate}")
-        #     self.log(f"Requested weight: {self.request.quantity}")
-
-        #     # mark dispensing complete to replace container in shelf
-        #     if weight_estimate < self.request.quantity + _DISPENSE_THRESHOLD:
-        #         self.error_message = f"Insufficient quantity"
-        #         self.state = RatatouilleStates.LOG_ERROR
-        #     else:
-        #         self.state = RatatouilleStates.HOME
 
         elif self.state == RatatouilleStates.DISPENSE:
             # # # TODO-nevalsar Remove
@@ -534,12 +497,12 @@ class Ratatouille:
             )
 
             # debugging code to bypass dispensing
-            self.request = None
-            self.state = RatatouilleStates.HOME
-            ratatouille.__robot_go_to_joint_state(
-                ratatouille.known_poses["joint"]["home"]
-            )
-            return
+            # self.request = None
+            # self.state = RatatouilleStates.HOME
+            # ratatouille.__robot_go_to_joint_state(
+            #     ratatouille.known_poses["joint"]["home"]
+            # )
+            # return
             # End debugging code to bypass dispensing
 
             dispenser = Dispenser(self.robot_mg)
