@@ -5,7 +5,7 @@ Do not stir while dispensing.
 Start at medium heat and manual mode
 Add the following
 
-1. Sunflower oil - 40gms
+1. Sunflower oil - 20gms
 2. Cumin seeds - 3.2gms
 3. Mustard seeds - 4.6gms
 4. Onions - 140gms
@@ -16,7 +16,7 @@ Add the following
 6. Turmeric - 1.25 gms
 7. Peanuts - 50gms
 
-----Stir at 3 level for 1 minute
+----Stir at 2 level for 3 minute
 
 8. Poha thick - 270gms
 9. Salt - 3.5gms
@@ -25,11 +25,8 @@ Add the following
 ----Stir at 1 level for 3 minutes
 
 To do:
-Dispense green chilli test
+
 Oil dispensing correction (Angle limit increased for liquids from 0.4*pi to 0.45*pi)
 Logical flow for liquids
-Test dispensing with stirrer down
-Order transparent cello tape, label maker tape, vegetable chopper
-Order t shirt
 Add lemon, potato,corriander, and nylon sev to garnish
 
