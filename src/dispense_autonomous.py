@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-import sys
 import rospy
 import rospkg
 import argparse
 import yaml
 import os
-from enum import Enum, auto
 from tf.transformations import *
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from geometry_msgs.msg import Pose
@@ -15,12 +13,11 @@ from typing import List
 import time
 from datetime import datetime
 
-from motion.commander import RobotMoveGroup
-from ratatouille_pose_transforms.transforms import PoseTransforms
 from motion.utils import make_pose, offset_pose, offset_pose_relative
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
+from planner.planner import DispensingStates, RatatouillePlanner
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
@@ -45,7 +42,7 @@ class Container:
         ingredient_name: str,
         container_expected_pose: List[float],
         container_pregrasp_pose: PoseStamped,
-        container_observed_pose: List[float]
+        container_observed_pose: List[float],
     ) -> None:
         self.ingredient_name = ingredient_name
         self.id = ingredient_id
@@ -75,19 +72,7 @@ class DispensingRequest:
         self.container_pregrasp_pose = None
 
 
-class RatatouilleStates(Enum):
-    # RESET = auto()
-    HOME = auto()
-    AWAIT_USER_INPUT = auto()
-    SEARCH_MARKER = auto()
-    VERIFY_INGREDIENT = auto()
-    PICK_CONTAINER = auto()
-    DISPENSE = auto()
-    REPLACE_CONTAINER = auto()
-    LOG_ERROR = auto()
-
-
-class Ratatouille:
+class Ratatouille(RatatouillePlanner):
     # flags
     debug_mode = None
     disable_gripper = None
@@ -96,13 +81,10 @@ class Ratatouille:
     disable_external_input = None
 
     # dependencies
-    robot_mg = None
-    known_poses = None
-    pose_transformer = None
     dispensing_update_publisher = None
 
     # state variables
-    state: RatatouilleStates = None
+    state: DispensingStates = None
     request: DispensingRequest = None
     container: Container = None
     error_message: str = None
@@ -113,7 +95,7 @@ class Ratatouille:
 
     def __init__(
         self,
-        state: RatatouilleStates,
+        state: DispensingStates,
         config_dir_path: str,
         dispense_log_file: str,
         ingredient_quantity_log: str,
@@ -123,43 +105,14 @@ class Ratatouille:
         debug_mode: bool = False,
         disable_external_input: bool = False,
     ) -> None:
+
+        super().__init__(debug_mode, disable_gripper, verbose)
+
         # initialize flags
-        self.debug_mode = debug_mode
-        self.disable_gripper = disable_gripper
-        self.verbose = verbose
         self.stop_and_proceed = stop_and_proceed
         self.disable_external_input = disable_external_input
 
         # initialize dependencies
-        if not self.debug_mode:
-            self.robot_mg = RobotMoveGroup()
-
-        with open(
-            file=os.path.join(config_dir_path, "ingredient_quantities.yaml"),
-            mode="r",
-        ) as _temp:
-            self.ingredient_quantities = yaml.safe_load(_temp)
-
-        with open(
-            file=os.path.join(config_dir_path, "poses.yaml"),
-            mode="r",
-        ) as _temp:
-            self.known_poses = yaml.safe_load(_temp)
-            self.known_poses["cartesian"]["ingredients"] = sorted(
-                self.known_poses["cartesian"]["ingredients"], key=lambda x: x["id"]
-            )
-        self.pouring_characteristics = {}
-        for ingredient in self.known_poses["cartesian"]["ingredients"]:
-            with open(
-                file=os.path.join(
-                    config_dir_path, "ingredient_params", ingredient["name"] + ".yaml"
-                ),
-                mode="r",
-            ) as f:
-                ingredient_params = yaml.safe_load(f)
-                self.pouring_characteristics[ingredient["name"]] = ingredient_params
-
-        self.pose_transformer = PoseTransforms()
         self.dispensing_update_publisher = rospy.Publisher(
             "dispensing_update", String, queue_size=1
         )
@@ -175,12 +128,10 @@ class Ratatouille:
         self.ingredient_quantity_log = ingredient_quantity_log
 
     def run(self) -> None:
-        print("\n" + "-" * 80)
-        print(f" {self.state} ".center(80))
-        print("-" * 80)
+        self.print_current_state_banner()
 
-        if self.state == RatatouilleStates.HOME:
-            self.log(f"Moving to home")
+        if self.state == DispensingStates.HOME:
+            self.log("Moving to home")
             # if not self.__robot_go_to_joint_state(self.known_poses["joint"]["home"]):
             if not self.__go_to_pose_cartesian_order(
                 make_pose(
@@ -191,27 +142,25 @@ class Ratatouille:
                 reverse=True,
             ):
                 self.error_message = "Unable to move to joint state"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             if self.container is None:
                 if self.request is None:
-                    self.state = RatatouilleStates.AWAIT_USER_INPUT
+                    self.state = DispensingStates.AWAIT_USER_INPUT
                 else:
-                    self.state = RatatouilleStates.SEARCH_MARKER
+                    self.state = DispensingStates.SEARCH_MARKER
             else:
                 if self.request is None:
-                    self.state = RatatouilleStates.REPLACE_CONTAINER
+                    self.state = DispensingStates.REPLACE_CONTAINER
                 else:
-                    self.state = RatatouilleStates.DISPENSE
+                    self.state = DispensingStates.DISPENSE
 
-        elif self.state == RatatouilleStates.AWAIT_USER_INPUT:
+        elif self.state == DispensingStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
                 self.log("Sending ingredient list to user input board")
                 _send_msg = String(
-                    "$".join(
-                        [str(x) for x in list(self.ingredient_quantities.values())]
-                    )
+                    "$".join([str(x) for x in list(self.calibration_data.values())])
                 )
                 self.dispensing_update_publisher.publish(_send_msg)
 
@@ -266,11 +215,11 @@ class Ratatouille:
                 self.log(
                     f"User requested for [{self.request.quantity} grams] of [{self.request.ingredient_name}]"
                 )
-                self.state = RatatouilleStates.HOME
+                self.state = DispensingStates.HOME
             else:
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
 
-        elif self.state == RatatouilleStates.SEARCH_MARKER:
+        elif self.state == DispensingStates.SEARCH_MARKER:
             # Move to ingredient view position
             self.log(
                 f"Moving to ingredient view position for [{self.request.ingredient_name}]"
@@ -286,7 +235,7 @@ class Ratatouille:
                 acceleration_scaling_factor=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Compute pregrasp position
@@ -324,24 +273,18 @@ class Ratatouille:
 
             if not is_marker_detected:
                 self.error_message = f"Unable to find ingredient marker."
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
-            self.state = RatatouilleStates.VERIFY_INGREDIENT
+            self.state = DispensingStates.VERIFY_INGREDIENT
 
-        elif self.state == RatatouilleStates.VERIFY_INGREDIENT:
+        elif self.state == DispensingStates.VERIFY_INGREDIENT:
             # Debugging code to bypass verfication
-            self.state = RatatouilleStates.PICK_CONTAINER
-            return
+            # self.state = DispensingStates.PICK_CONTAINER
+            # return
             # End debugging code to bypass verfication
 
             start_time = time.time()
-
-            # TODO: remove
-            if self.request.ingredient_name == "lentils":
-                self.log(f"Ingredient [{self.request.ingredient_name}] verified.")
-                self.state = RatatouilleStates.PICK_CONTAINER
-                return
 
             rospy.wait_for_service("ingredient_validation")
             try:
@@ -354,7 +297,7 @@ class Ratatouille:
                 self.error_message = (
                     f"Ingredient detection service call failed. Error: {e}"
                 )
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
 
             self.log(
                 f"Expected [{self.request.ingredient_name}]. Detected [{detected_ingredient}]"
@@ -362,15 +305,14 @@ class Ratatouille:
 
             if detected_ingredient == self.request.ingredient_name:
                 self.log(f"Ingredient [{self.request.ingredient_name}] verified.")
-                self.state = RatatouilleStates.PICK_CONTAINER
+                self.state = DispensingStates.PICK_CONTAINER
             else:
                 self.error_message = (
                     f"Ingredient [{self.request.ingredient_name}] not detected."
                 )
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
 
-        elif self.state == RatatouilleStates.PICK_CONTAINER:
-            self.log("Opening gripper")
+        elif self.state == DispensingStates.PICK_CONTAINER:
             self.__robot_open_gripper(wait=False)
 
             # Move to pregrasp position
@@ -379,7 +321,7 @@ class Ratatouille:
                 pose=self.container_pregrasp_pose.pose, acc_scaling=0.1
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Compute actual container position from pre-grasp position
@@ -410,11 +352,10 @@ class Ratatouille:
                 pose=self.container_observed_pose, acc_scaling=0.05
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Grip the container
-            self.log("Closing the gripper")
             self.__robot_close_gripper(wait=True)
 
             # Set container
@@ -439,7 +380,7 @@ class Ratatouille:
             temp_pose = self.__correct_gripper_angle_tilt(temp_pose)
             if not self.__robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # go back out of shelf
@@ -452,15 +393,15 @@ class Ratatouille:
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
-            self.state = RatatouilleStates.HOME
+            self.state = DispensingStates.HOME
 
-        elif self.state == RatatouilleStates.DISPENSE:
+        elif self.state == DispensingStates.DISPENSE:
             # # # TODO-nevalsar Remove
             # self.request = None
-            # self.state = RatatouilleStates.HOME
+            # self.state = DispensingStates.HOME
             # return
 
             # Move to pre-dispense position
@@ -469,7 +410,7 @@ class Ratatouille:
                 self.known_poses["joint"]["pre_dispense"]
             ):
                 self.error_message = "Unable to move to joint state"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Move to dispense position
@@ -488,7 +429,7 @@ class Ratatouille:
                 velocity_scaling=0.15,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Dispense ingredient
@@ -498,7 +439,7 @@ class Ratatouille:
 
             # debugging code to bypass dispensing
             # self.request = None
-            # self.state = RatatouilleStates.HOME
+            # self.state = DispensingStates.HOME
             # ratatouille.__robot_go_to_joint_state(
             #     ratatouille.known_poses["joint"]["home"]
             # )
@@ -528,7 +469,7 @@ class Ratatouille:
                 self.known_poses["joint"]["pre_dispense"]
             ):
                 self.error_message = "Unable to move to joint state"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # add entry to dispensing log file
@@ -545,40 +486,16 @@ class Ratatouille:
 
             # Since dispensing is complete, clear user request
             self.request = None
-            self.state = RatatouilleStates.HOME
+            self.state = DispensingStates.HOME
             ratatouille.__robot_go_to_joint_state(
                 ratatouille.known_poses["joint"]["home"]
             )
 
-        elif self.state == RatatouilleStates.REPLACE_CONTAINER:
-
-            # # Move to ingredient view position
-            # self.log(
-            #     f"Moving to view position for ingredient: {self.container.ingredient_name}"
-            # )
-            # if not self.__robot_go_to_pose_goal(
-            #     make_pose(
-            #         self.container.container_expected_pose[:3],
-            #         self.container.container_expected_pose[3:],
-            #     ),
-            #     acc_scaling=0.1,
-            # ):
-            #     self.error_message = "Error moving to pose goal"
-            #     self.state = RatatouilleStates.LOG_ERROR
-            #     return
-
-            # # Move up a little to prevent container hitting the shelf
-            # self.log("Moving up to avoid hitting shelf while replacing container")
-            # if not self.__robot_go_to_pose_goal(
-            #     offset_pose(self.robot_mg.get_current_pose(), [0, 0, 0.12]),
-            #     acc_scaling=0.1,
-            # ):
-            #     self.error_message = "Error moving to pose goal"
-            #     self.state = RatatouilleStates.LOG_ERROR
-            #     return
-
+        elif self.state == DispensingStates.REPLACE_CONTAINER:
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
-            self.container.container_expected_pose[2] = self.container.container_observed_pose.position.z
+            self.container.container_expected_pose[
+                2
+            ] = self.container.container_observed_pose.position.z
 
             # Move up a little to prevent container hitting the shelf
             self.log(
@@ -595,7 +512,7 @@ class Ratatouille:
                 acceleration_scaling_factor=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Move to ingredient position
@@ -613,7 +530,7 @@ class Ratatouille:
                 )
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
             # Release gripper
@@ -633,124 +550,21 @@ class Ratatouille:
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
-                self.state = RatatouilleStates.LOG_ERROR
+                self.state = DispensingStates.LOG_ERROR
                 return
 
-            self.state = RatatouilleStates.HOME
+            self.state = DispensingStates.HOME
 
-        elif self.state == RatatouilleStates.LOG_ERROR:
+        elif self.state == DispensingStates.LOG_ERROR:
             rospy.logerr(self.error_message)
             rospy.logwarn("Press any key to reset.")
             input()
             # reset user request after error
             self.error_message = None
             self.request = None
-            self.state = RatatouilleStates.HOME
+            self.state = DispensingStates.HOME
 
         return
-
-    def __robot_open_gripper(self, wait):
-        if not self.disable_gripper:
-            return self.robot_mg.open_gripper(wait=wait)
-
-    def __robot_close_gripper(self, wait):
-        if not self.disable_gripper:
-            return self.robot_mg.close_gripper(wait=wait)
-
-    def __robot_go_to_joint_state(self, pose):
-        if not self.debug_mode:
-            return self.robot_mg.go_to_joint_state(pose)
-
-    def __robot_go_to_pose_goal(
-        self, pose, acc_scaling=0.2, velocity_scaling=0.2, orient_tolerance=0.01
-    ):
-        if not self.debug_mode:
-            return self.robot_mg.go_to_pose_goal(
-                pose,
-                acc_scaling=acc_scaling,
-                velocity_scaling=velocity_scaling,
-                orient_tolerance=orient_tolerance,
-            )
-
-    def __correct_gripper_angle_tilt(self, pose: Pose, reverse: bool = False) -> Pose:
-        _temp_euler = euler_from_quaternion(
-            (
-                pose.orientation.x,
-                pose.orientation.y,
-                pose.orientation.z,
-                pose.orientation.w,
-            )
-        )
-        angle_offset = 0.04 * (-1, 1)[reverse]
-        _temp_quaternion = quaternion_from_euler(
-            _temp_euler[0] + angle_offset, _temp_euler[1], _temp_euler[2]
-        )
-        pose.orientation.x = _temp_quaternion[0]
-        pose.orientation.y = _temp_quaternion[1]
-        pose.orientation.z = _temp_quaternion[2]
-        pose.orientation.w = _temp_quaternion[3]
-        return pose
-
-    def __go_to_pose_cartesian_order(
-        self,
-        goal: Pose,
-        acceleration_scaling_factor: float,
-        reverse: bool = False,
-    ) -> None:
-
-        # go to required orientation
-        current_pose = self.robot_mg.get_current_pose()
-        if not self.__robot_go_to_pose_goal(
-            make_pose(
-                [
-                    current_pose.position.x,
-                    current_pose.position.y,
-                    current_pose.position.z,
-                ],
-                [
-                    goal.orientation.x,
-                    goal.orientation.y,
-                    goal.orientation.z,
-                    goal.orientation.w,
-                ],
-            ),
-            orient_tolerance=0.1,
-        ):
-            return False
-
-        relative_pose: Pose = offset_pose_relative(
-            goal, self.robot_mg.get_current_pose()
-        )
-        offsets = [
-            [relative_pose.position.x, 0, 0],
-            [0, 0, relative_pose.position.z],
-            [0, relative_pose.position.y, 0],
-        ]
-        # offsets = [
-        #     make_pose([current_pose.position.x, current_pose.position.y, current_pose.position.z], current_pose.pose),
-        #     make_pose([current_pose.position.x, current_pose.position.y, current_pose.position.z], current_pose.pose),
-        #     make_pose([current_pose.position.x, current_pose.position.y, current_pose.position.z], current_pose.pose),
-
-        # ]
-        if reverse:
-            offsets.reverse()
-        for offset in offsets:
-            if not self.__robot_go_to_pose_goal(
-                offset_pose(self.robot_mg.get_current_pose(), offset),
-                acc_scaling=acceleration_scaling_factor,
-            ):
-                return False
-        return True
-
-    def log(self, msg):
-        if self.verbose:
-            print(msg)
-        if self.stop_and_proceed:
-            print("(Press enter to continue): ", end="")
-            input()
-
-    def reset_position(self):
-        self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
 
 if __name__ == "__main__":
@@ -798,37 +612,18 @@ if __name__ == "__main__":
     if args.config_dir is None:
         args.config_dir = os.path.join(package_path, "config")
 
-    if args.dispense_log_file is None:
-        args.dispense_log_file = os.path.join(
-            package_path, "logs", "dispense_history.log"
-        )
-        temp_dir = os.path.dirname(args.dispense_log_file)
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-
-    if args.ingredient_quantity_log is None:
-        args.ingredient_quantity_log = os.path.join(
-            package_path, "logs", "ingredient_quantities.log"
-        )
-        temp_dir = os.path.dirname(args.ingredient_quantity_log)
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-
     # initialize state machine
     ratatouille = Ratatouille(
-        RatatouilleStates.HOME,
+        DispensingStates.HOME,
         disable_gripper=args.disable_gripper,
         config_dir_path=args.config_dir,
         verbose=args.verbose,
         stop_and_proceed=args.stop_and_proceed,
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
-        dispense_log_file=args.dispense_log_file,
-        ingredient_quantity_log=args.ingredient_quantity_log,
     )
 
     # reset robot position on start
-    print("Reset position to HOME.")
     ratatouille.reset_position()
 
     # run state machine while ROS is running
