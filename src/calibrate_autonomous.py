@@ -139,9 +139,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         elif self.state == InventoryUpdateStates.VISIT_NEXT_CONTAINER:
             # Move to ingredient view position
             self.log(f"Moving to ingredient view position for [{self.ingredient_id}]")
-            print(
-                f"self ingredient expected pose{self.ingredient_position}"
-            )
+            print(f"self ingredient expected pose{self.ingredient_position}")
             if not self._go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
@@ -214,16 +212,15 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 service_call = rospy.ServiceProxy(
                     "ingredient_validation", ValidateIngredient
                 )
-                response = service_call()
+                response = service_call(mode="rgb")
+                print(f"Service Response: {response.found_ingredient.lower()}")
 
             except rospy.ServiceException as e:
                 self.error_message = (
-                    f"Ingredient detection service call failed. Error: {e}"
+                    f"Ingredient detection service call (RGB) failed. Error: {e}"
                 )
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
-
-            print(f"Service Response: {response.found_ingredient.lower()}")
 
             try:
                 self.ingredient_name = IngredientTypes(
@@ -231,10 +228,6 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 )
                 self.log(f"Found [{self.ingredient_name}]")
                 self.state = InventoryUpdateStates.PICK_CONTAINER
-
-                if self.ingredient_name == IngredientTypes.NO_INGREDIENT:
-                    self.ingredient_quantity = 0
-                    self.state = InventoryUpdateStates.HOME
 
             except ValueError:
                 self.error_message = (
@@ -388,6 +381,29 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             self._robot_open_gripper(wait=True)
 
+            rospy.wait_for_service("ingredient_validation")
+            try:
+                service_call = rospy.ServiceProxy(
+                    "ingredient_validation", ValidateIngredient
+                )
+                response = service_call(
+                    # mode="spectral", ingredient_name=self.ingredient_name
+                    # TODO: remove hack for spectral camera run
+                    mode="spectral",
+                    ingredient_name="salt",
+                )
+                # TODO: assign and log correct response from spectral validation
+                # self.log(f"Spectral camera response: {response.found_ingredient.lower()}")
+                # self.ingredient_name = response.found_ingredient.lower()
+                self.log(f"Spectral camera response: {response}")
+
+            except rospy.ServiceException as e:
+                self.error_message = (
+                    f"Ingredient detection service call (spectral) failed. Error: {e}"
+                )
+                self.error_state = self.state
+                self.state = InventoryUpdateStates.LOG_ERROR
+
             self.ingredient_quantity = 100
 
             self._robot_close_gripper(wait=True)
@@ -417,9 +433,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         elif self.state == InventoryUpdateStates.REPLACE_CONTAINER:
 
             # correct the z-height of the container_expected_pose using container_observed_pose z-height
-            self.ingredient_position["view_pose"][
-                2
-            ] = self.ingredient_actual_position.position.z
+            self.ingredient_position[2] = self.ingredient_actual_position.position.z
 
             # Move up a little to prevent container hitting the shelf
             self.log(
@@ -428,8 +442,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             if not self._go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
-                        self.ingredient_position["view_pose"][:3],
-                        self.ingredient_position["view_pose"][3:],
+                        self.ingredient_position[:3],
+                        self.ingredient_position[3:],
                     ),
                     [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
                 ),

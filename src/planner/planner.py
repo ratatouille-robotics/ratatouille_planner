@@ -34,6 +34,7 @@ class IngredientTypes(str, Enum):
     SALT = "salt"
     SUGAR = "sugar"
     VINEGAR = "vinegar"
+    WATER = "water"
     ONION_WHITE = "whiteonion"
     NO_INGREDIENT = "no_ingredient"
     NO_CONTAINER = "no_container"
