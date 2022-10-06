@@ -36,6 +36,7 @@ _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 # - all containers are of same height, limited by UR5e arm reach (software fully supports it)
 # - every container should be filled to minimum fill level for ingredient identification
 
+
 class InventoryUpdateStateMachine(RatatouillePlanner):
     # flags
     debug_mode = None
@@ -63,11 +64,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         debug_mode: bool = False,
         disable_external_input: bool = False,
         bypass_picking: bool = False,
-        bypass_sensing: bool = False
+        bypass_sensing: bool = False,
     ) -> None:
-        self.config_dir_path = config_dir_path
 
-        super().__init__(debug_mode, disable_gripper, verbose)
+        super().__init__(config_dir_path, debug_mode, disable_gripper, verbose)
 
         # initialize flags
         self.stop_and_proceed = stop_and_proceed
@@ -120,12 +120,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             else:
                 self.ingredient_id = self.__get_next_ingredient_position()
                 print(f"Self ingredient id {self.ingredient_id}")
-                self.ingredient_position = list(
-                    filter(
-                        lambda x: x["id"] == self.ingredient_id,
-                        self.known_poses["cartesian"]["ingredients"],
-                    )
-                )[0]
+                self.ingredient_position = self.known_poses["cartesian"]["positions"][
+                    self.ingredient_id
+                ]
                 # go to next position
                 self.state = InventoryUpdateStates.VISIT_NEXT_CONTAINER
 
@@ -143,13 +140,13 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # Move to ingredient view position
             self.log(f"Moving to ingredient view position for [{self.ingredient_id}]")
             print(
-                f"self ingredient expected pose{self.ingredient_position['view_pose']}"
+                f"self ingredient expected pose{self.ingredient_position}"
             )
             if not self._go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
-                        self.ingredient_position["view_pose"][:3],
-                        self.ingredient_position["view_pose"][3:],
+                        self.ingredient_position[:3],
+                        self.ingredient_position[3:],
                     ),
                     _OFFSET_CONTAINER_VIEW,
                 ),
@@ -308,13 +305,13 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self.log("Moving to expected ingredient position")
             temp_pose = make_pose(
                 [
-                    self.ingredient_position["view_pose"][0],
-                    self.ingredient_position["view_pose"][1],
-                    self.ingredient_position["view_pose"][2] + _CONTAINER_LIFT_OFFSET,
+                    self.ingredient_position[0],
+                    self.ingredient_position[1],
+                    self.ingredient_position[2] + _CONTAINER_LIFT_OFFSET,
                 ],
-                self.ingredient_position["view_pose"][3:],
+                self.ingredient_position[3:],
             )
-            
+
             # TODO: verify if second correction required
             # temp_pose = self._correct_gripper_angle_tilt(temp_pose)
 
@@ -520,9 +517,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--bypass-picking", help="Bypass container picking", action="store_true"
     )
-    parser.add_argument(
-        "--bypass-sensing", help="Bypass sensing", action="store_true"
-    )
+    parser.add_argument("--bypass-sensing", help="Bypass sensing", action="store_true")
     parser.add_argument("--verbose", help="Enable verbose output", action="store_true")
     parser.add_argument(
         "--stop-and-proceed",
@@ -556,8 +551,8 @@ if __name__ == "__main__":
         stop_and_proceed=args.stop_and_proceed,
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
-        bypass_picking = args.bypass_picking,
-        bypass_sensing = args.bypass_sensing
+        bypass_picking=args.bypass_picking,
+        bypass_sensing=args.bypass_sensing,
     )
 
     # reset robot position on start

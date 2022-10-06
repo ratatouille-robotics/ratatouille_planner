@@ -45,8 +45,8 @@ class IngredientTypes(str, Enum):
 class DispensingStates(Enum):
     HOME = auto()
     AWAIT_USER_INPUT = auto()
-    SEARCH_MARKER = auto()
-    VERIFY_INGREDIENT = auto()
+    # SEARCH_MARKER = auto()
+    # VERIFY_INGREDIENT = auto()
     PICK_CONTAINER = auto()
     DISPENSE = auto()
     REPLACE_CONTAINER = auto()
@@ -98,13 +98,23 @@ class RatatouillePlanner(ABC):
     debug_mode = False
     disable_gripper = False
     verbose = True
+    config_dir_path = None
+
+    inventory = None
 
     pose_transformer = None
     robot_mg = None
     known_poses = None
     inventory = Shelf(_CALIBRATION_START_CONTAINER, _CALIBRATION_END_CONTAINER)
 
-    def __init__(self, _debug: bool, _disable_gripper: bool, _verbose: bool) -> None:
+    def __init__(
+        self,
+        _config_dir_path: str,
+        _debug: bool,
+        _disable_gripper: bool,
+        _verbose: bool,
+    ) -> None:
+        self.config_dir_path = _config_dir_path
         self.debug_mode = _debug
         self.verbose = _verbose
         self.disable_gripper = _disable_gripper
@@ -127,21 +137,9 @@ class RatatouillePlanner(ABC):
             mode="r",
         ) as _temp:
             self.known_poses = yaml.safe_load(_temp)
-            self.known_poses["cartesian"]["ingredients"] = sorted(
-                self.known_poses["cartesian"]["ingredients"], key=lambda x: x["id"]
-            )
-        self.pouring_characteristics = {}
-        for ingredient in self.known_poses["cartesian"]["ingredients"]:
-            with open(
-                file=os.path.join(
-                    self.config_dir_path,
-                    "ingredient_params",
-                    ingredient["name"] + ".yaml",
-                ),
-                mode="r",
-            ) as f:
-                ingredient_params = yaml.safe_load(f)
-                self.pouring_characteristics[ingredient["name"]] = ingredient_params
+            # self.known_poses["cartesian"]["ingredients"] = sorted(
+            #     self.known_poses["cartesian"]["ingredients"], key=lambda x: x["id"]
+            # )
 
     def load_inventory(self):
         with open(
@@ -153,6 +151,7 @@ class RatatouillePlanner(ABC):
             if _inventory:
                 for key in _inventory:
                     self.inventory.positions[key] = _inventory[key]
+        self.pouring_characteristics = {}
 
     def write_inventory(self) -> None:
         # skip writing null values

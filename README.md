@@ -16,15 +16,13 @@ stateDiagram-v2
 
     has_container --> has_request1: False \n Has Request?
     has_request1 --> AWAIT_USER_INPUT: False
-    has_request1 --> SEARCH_MARKER: True
+    has_request1 --> PICK_CONTAINER: True
     has_container --> has_request2: True \n Has Request?
     has_request2 --> DISPENSE: True
     has_request2 --> REPLACE_CONTAINER: False
 
     AWAIT_USER_INPUT --> HOME: has_request = True
 
-    SEARCH_MARKER --> VERIFY_INGREDIENT
-    VERIFY_INGREDIENT --> PICK_CONTAINER
     PICK_CONTAINER --> HOME: has_container = True
 
     REPLACE_CONTAINER --> HOME: has_container = False
@@ -34,8 +32,6 @@ stateDiagram-v2
     LOG_ERROR --> HOME: Reset error \n has_request = False
 
     AWAIT_USER_INPUT --> LOG_ERROR: has_error = True
-    SEARCH_MARKER --> LOG_ERROR: has_error = True
-    VERIFY_INGREDIENT --> LOG_ERROR: has_error = True
     PICK_CONTAINER --> LOG_ERROR: has_error = True
     DISPENSE --> LOG_ERROR: has_error = True
     REPLACE_CONTAINER --> LOG_ERROR: has_error = True
