@@ -19,6 +19,7 @@ from planner.planner import (
     InventoryUpdateStates,
     IngredientTypes,
     RatatouillePlanner,
+    Container,
 )
 
 _ROS_RATE = 10.0
@@ -52,19 +53,17 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
     state: InventoryUpdateStates = None
     error_message: str = None
 
-    # log files
-    dispense_log_file: str = None
-
     def __init__(
         self,
         state: InventoryUpdateStates,
         config_dir_path: str,
-        dispense_log_file: str,
         disable_gripper: bool = False,
         verbose: bool = False,
         stop_and_proceed: bool = False,
         debug_mode: bool = False,
         disable_external_input: bool = False,
+        bypass_picking: bool = False,
+        bypass_sensing: bool = False
     ) -> None:
         self.config_dir_path = config_dir_path
 
@@ -73,6 +72,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         # initialize flags
         self.stop_and_proceed = stop_and_proceed
         self.disable_external_input = disable_external_input
+        self.debug_bypass_picking = bypass_picking
+        self.debug_bypass_sensing = bypass_sensing
 
         # initialize dependencies
 
@@ -87,9 +88,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.error_message = None
 
     def __get_next_ingredient_position(self) -> int:
-        print(f"Calibration: {self.calibration_data.positions}")
-        for key in self.calibration_data.positions:
-            if self.calibration_data.positions[key] is None:
+        print(f"Calibration: {self.inventory.positions}")
+        for key in self.inventory.positions:
+            if self.inventory.positions[key] is None:
                 return key
         return -1
 
@@ -98,7 +99,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
         if self.state == InventoryUpdateStates.HOME:
             self.log(f"Moving to home")
-            if not self.__go_to_pose_cartesian_order(
+            if not self._go_to_pose_cartesian_order(
                 make_pose(
                     self.known_poses["cartesian"]["home"][:3],
                     self.known_poses["cartesian"]["home"][3:],
@@ -130,24 +131,12 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
         elif self.state == InventoryUpdateStates.WRITE_CALIBRATION_DATA:
 
-            # write data
-            self.calibration_data.positions[self.ingredient_id] = Container(
+            # update inventory of current position
+            self.inventory.positions[self.ingredient_id] = Container(
                 self.ingredient_name,
                 self.ingredient_quantity,
             )
-
-            print(f"Writing calibration data...")
-            print(self.calibration_data.positions)
-
-            # skip writing null values
-            _temp_data = {k: v for k, v in self.calibration_data.positions.items() if v}
-
-            with open(
-                os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w"
-            ) as _temp:
-                documents = yaml.dump(_temp_data, _temp)
-                print(documents)
-
+            self.write_inventory()
             self.state = InventoryUpdateStates.HOME
 
         elif self.state == InventoryUpdateStates.VISIT_NEXT_CONTAINER:
@@ -156,7 +145,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             print(
                 f"self ingredient expected pose{self.ingredient_position['view_pose']}"
             )
-            if not self.__go_to_pose_cartesian_order(
+            if not self._go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
                         self.ingredient_position["view_pose"][:3],
@@ -258,12 +247,18 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.state = InventoryUpdateStates.LOG_ERROR
 
         elif self.state == InventoryUpdateStates.PICK_CONTAINER:
+            if self.debug_bypass_picking:
+                self.log(f"Container picking bypassed.")
+                self.ingredient_quantity = 100
+                self.state = InventoryUpdateStates.WRITE_CALIBRATION_DATA
+                return
+
             self.log("Opening gripper")
-            self.__robot_open_gripper(wait=False)
+            self._robot_open_gripper(wait=False)
 
             # Move to pregrasp position
             self.log("Moving to pregrasp position")
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 pose=self.container_pregrasp_pose.pose, acc_scaling=0.1
             ):
                 self.error_message = "Error moving to pose goal"
@@ -286,7 +281,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             # correct gripper angling upward issue by adding pitch correction to tilt
             # the gripper upward
-            pose_marker_base_frame.pose = self.__correct_gripper_angle_tilt(
+            pose_marker_base_frame.pose = self._correct_gripper_angle_tilt(
                 pose_marker_base_frame.pose
             )
 
@@ -295,7 +290,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             # Move to container position
             self.log("Moving to pick container from actual container position")
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 pose=self.ingredient_actual_position, acc_scaling=0.05
             ):
                 self.error_message = "Error moving to pose goal"
@@ -305,7 +300,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             # Grip the container
             self.log("Closing the gripper")
-            self.__robot_close_gripper(wait=True)
+            self._robot_close_gripper(wait=True)
 
             self.has_container = True
 
@@ -319,8 +314,11 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 ],
                 self.ingredient_position["view_pose"][3:],
             )
-            temp_pose = self.__correct_gripper_angle_tilt(temp_pose)
-            if not self.__robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
+            
+            # TODO: verify if second correction required
+            # temp_pose = self._correct_gripper_angle_tilt(temp_pose)
+            
+            if not self._robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
@@ -328,7 +326,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             # go back out of shelf
             self.log("Backing out of the shelf")
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 offset_pose(
                     self.robot_mg.get_current_pose(),
                     [0, _CONTAINER_SHELF_BACKOUT_OFFSET, 0],
@@ -345,13 +343,15 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         elif self.state == InventoryUpdateStates.CHECK_QUANTITY:
 
             # bypass sensing
-            # self.ingredient_quantity = 100
-            # self.state = InventoryUpdateStates.HOME
-            # return
+            if self.debug_bypass_sensing:
+                self.log(f"Sensing bypassed.")
+                self.ingredient_quantity = 100
+                self.state = InventoryUpdateStates.HOME
+                return
             # end bypass sensing
 
             self.log("Moving to pre-sense position")
-            if not self.__robot_go_to_joint_state(
+            if not self._robot_go_to_joint_state(
                 self.known_poses["joint"]["pre_sense"]
             ):
                 self.error_message = "Unable to move to joint state"
@@ -360,7 +360,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 return
 
             self.log("Moving to sense position")
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 make_pose(
                     self.known_poses["cartesian"]["sense"][:3],
                     self.known_poses["cartesian"]["sense"][3:],
@@ -375,14 +375,14 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # wait before opening gripper
             # time.sleep(5);
 
-            self.__robot_open_gripper(wait=True)
+            self._robot_open_gripper(wait=True)
 
             self.ingredient_quantity = 100
 
-            self.__robot_close_gripper(wait=True)
+            self._robot_close_gripper(wait=True)
 
             self.log("Moving to pre-sense position")
-            if not self.__robot_go_to_joint_state(
+            if not self._robot_go_to_joint_state(
                 self.known_poses["joint"]["pre_sense"]
             ):
                 self.error_message = "Unable to move to joint state"
@@ -399,7 +399,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             self.log(f"Estimated weight: {self.ingredient_quantity}")
 
-            self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
+            self._robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
             self.state = InventoryUpdateStates.HOME
 
@@ -414,7 +414,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self.log(
                 "Moving a little above expected view (to avoid hitting shelf while replacing container)"
             )
-            if not self.__go_to_pose_cartesian_order(
+            if not self._go_to_pose_cartesian_order(
                 offset_pose(
                     make_pose(
                         self.ingredient_position["view_pose"][:3],
@@ -433,11 +433,11 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self.log("Moving to replace container at ingredient position")
 
             # revert correction for gripper angle tilt
-            _temp_pose = self.__correct_gripper_angle_tilt(
+            _temp_pose = self._correct_gripper_angle_tilt(
                 self.robot_mg.get_current_pose(), reverse=False
             )
 
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 offset_pose(
                     _temp_pose,
                     [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
@@ -450,14 +450,14 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             # Release gripper
             self.log("Opening gripper")
-            self.__robot_open_gripper(wait=True)
+            self._robot_open_gripper(wait=True)
 
             # Remove container once replaced
             self.has_container = False
 
             # Move back out of the shelf
             self.log("Backing out of the shelf")
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 offset_pose(
                     self.robot_mg.get_current_pose(),
                     [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
@@ -503,6 +503,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--disable-external-input", help="Disable user input board", action="store_true"
     )
+    parser.add_argument(
+        "--bypass-picking", help="Bypass container picking", action="store_true"
+    )
+    parser.add_argument(
+        "--bypass-sensing", help="Bypass sensing", action="store_true"
+    )
     parser.add_argument("--verbose", help="Enable verbose output", action="store_true")
     parser.add_argument(
         "--stop-and-proceed",
@@ -536,8 +542,8 @@ if __name__ == "__main__":
         stop_and_proceed=args.stop_and_proceed,
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
-        dispense_log_file=args.dispense_log_file,
-        ingredient_quantity_log=args.ingredient_quantity_log,
+        bypass_picking = args.bypass_picking,
+        bypass_sensing = args.bypass_sensing
     )
 
     # reset robot position on start

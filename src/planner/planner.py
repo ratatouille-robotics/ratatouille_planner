@@ -4,18 +4,37 @@ import os
 
 from enum import Enum, auto
 from typing import Dict
+from geometry_msgs.msg import Pose
+from tf.transformations import *
 
 from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
+from motion.utils import make_pose, offset_pose, offset_pose_relative
 
 _INVENTORY_FILE_PATH = "inventory.yaml"
 _CALIBRATION_START_CONTAINER = 1
 _CALIBRATION_END_CONTAINER = 15
 
+
 class IngredientTypes(str, Enum):
+    OLIVES_BLACK = "blackolives"
+    BLACK_PEPPER = "blackpepper"
+    CABBAGE = "cabbage"
+    CARROT = "carrot"
+    CHERRY_TOMATOES = "cherrytomatoes"
+    CHILLI_FLAKES = "chilliflakes"
+    CORN = "corn"
+    CUCUMBER = "cucumber"
+    OLIVES_GREEN = "greenolives"
+    HABANERO = "habaneropepper"
+    MUSHROOM = "mushroom"
+    OREGANO = "oregano"
+    PEANUTS = "peanuts"
+    ONION_RED = "redonion"
     SALT = "salt"
     SUGAR = "sugar"
     VINEGAR = "vinegar"
+    ONION_WHITE = "whiteonion"
     NO_INGREDIENT = "no_ingredient"
     NO_CONTAINER = "no_container"
 
@@ -85,23 +104,26 @@ class RatatouillePlanner(ABC):
     known_poses = None
     inventory = Shelf(_CALIBRATION_START_CONTAINER, _CALIBRATION_END_CONTAINER)
 
-    def __init__(self, _debug: bool, _disable_gripper: bool, _verbose: bool)  -> None:
+    def __init__(self, _debug: bool, _disable_gripper: bool, _verbose: bool) -> None:
         self.debug_mode = _debug
         self.verbose = _verbose
         self.disable_gripper = _disable_gripper
-        
+
         self.pose_transformer = PoseTransforms()
 
         if not self.debug_mode:
             self.robot_mg = RobotMoveGroup()
 
+        self.load_dispensing_params()
+        self.load_inventory()
+
     @abstractmethod
     def run(self) -> None:
         pass
 
-    def load_dispensing_params(self, config_dir_path: str):
+    def load_dispensing_params(self):
         with open(
-            file=os.path.join(config_dir_path, "poses.yaml"),
+            file=os.path.join(self.config_dir_path, "poses.yaml"),
             mode="r",
         ) as _temp:
             self.known_poses = yaml.safe_load(_temp)
@@ -112,15 +134,16 @@ class RatatouillePlanner(ABC):
         for ingredient in self.known_poses["cartesian"]["ingredients"]:
             with open(
                 file=os.path.join(
-                    config_dir_path, "ingredient_params", ingredient["name"] + ".yaml"
+                    self.config_dir_path,
+                    "ingredient_params",
+                    ingredient["name"] + ".yaml",
                 ),
                 mode="r",
             ) as f:
                 ingredient_params = yaml.safe_load(f)
                 self.pouring_characteristics[ingredient["name"]] = ingredient_params
 
-
-    def load_inventory(self, config_dir_path: str):
+    def load_inventory(self):
         with open(
             file=os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH),
             mode="r",
@@ -130,40 +153,50 @@ class RatatouillePlanner(ABC):
             if _inventory:
                 for key in _inventory:
                     self.inventory.positions[key] = _inventory[key]
-    
+
+    def write_inventory(self) -> None:
+        # skip writing null values
+        _inventory = {k: v for k, v in self.inventory.positions.items() if v}
+        with open(
+            os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w"
+        ) as _temp:
+            yaml.dump(_inventory, _temp)
+        if self.verbose:
+            print(f"Inventory updated to disk: {_inventory}")
+
     def print_current_state_banner(self):
         print("\n" + "-" * 80)
         print(f" {self.state} ".center(80))
         print("-" * 80)
-    
+
     def log(self, msg):
         if self.verbose:
             print(msg)
         if self.stop_and_proceed:
             print("(Press enter to continue): ", end="")
             input()
-    
+
     def reset_position(self):
         self.log("Resetting robot position to Home.")
         if self.known_poses == None:
             raise Exception("Poses not loaded.")
-        self.__robot_go_to_joint_state(self.known_poses["joint"]["home"])
+        self._robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
-    def __robot_go_to_joint_state(self, pose):
+    def _robot_go_to_joint_state(self, pose):
         if not self.debug_mode:
             return self.robot_mg.go_to_joint_state(pose)
 
-    def __robot_open_gripper(self, wait):
+    def _robot_open_gripper(self, wait):
         self.log("Opening gripper")
         if not self.disable_gripper:
             return self.robot_mg.open_gripper(wait=wait)
 
-    def __robot_close_gripper(self, wait):
+    def _robot_close_gripper(self, wait):
         self.log("Closing gripper")
         if not self.disable_gripper:
             return self.robot_mg.close_gripper(wait=wait)
 
-    def __go_to_pose_cartesian_order(
+    def _go_to_pose_cartesian_order(
         self,
         goal: Pose,
         acceleration_scaling_factor: float,
@@ -172,7 +205,7 @@ class RatatouillePlanner(ABC):
 
         # go to required orientation
         current_pose = self.robot_mg.get_current_pose()
-        if not self.__robot_go_to_pose_goal(
+        if not self._robot_go_to_pose_goal(
             make_pose(
                 [
                     current_pose.position.x,
@@ -202,14 +235,14 @@ class RatatouillePlanner(ABC):
         if reverse:
             offsets.reverse()
         for offset in offsets:
-            if not self.__robot_go_to_pose_goal(
+            if not self._robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), offset),
                 acc_scaling=acceleration_scaling_factor,
             ):
                 return False
         return True
-    
-    def __robot_go_to_pose_goal(
+
+    def _robot_go_to_pose_goal(
         self, pose, acc_scaling=0.2, velocity_scaling=0.2, orient_tolerance=0.01
     ):
         if not self.debug_mode:
@@ -220,7 +253,7 @@ class RatatouillePlanner(ABC):
                 orient_tolerance=orient_tolerance,
             )
 
-    def __correct_gripper_angle_tilt(self, pose: Pose, reverse: bool = False) -> Pose:
+    def _correct_gripper_angle_tilt(self, pose: Pose, reverse: bool = False) -> Pose:
         _temp_euler = euler_from_quaternion(
             (
                 pose.orientation.x,
