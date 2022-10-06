@@ -34,7 +34,7 @@ _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 # ASSUMPTIONS
 # - all markers should be at correct positions (eg. marker 1 at position 1)
 # - all containers are of same height, limited by UR5e arm reach (software fully supports it)
-
+# - every container should be filled to minimum fill level for ingredient identification
 
 class InventoryUpdateStateMachine(RatatouillePlanner):
     # flags
@@ -317,7 +317,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             
             # TODO: verify if second correction required
             # temp_pose = self._correct_gripper_angle_tilt(temp_pose)
-            
+
             if not self._robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
@@ -334,6 +334,20 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 acc_scaling=0.1,
             ):
                 self.error_message = "Error moving to pose goal"
+                self.error_state = self.state
+                self.state = InventoryUpdateStates.LOG_ERROR
+                return
+
+            # go home in cartesian order
+            if not self._go_to_pose_cartesian_order(
+                make_pose(
+                    self.known_poses["cartesian"]["home"][:3],
+                    self.known_poses["cartesian"]["home"][3:],
+                ),
+                acceleration_scaling_factor=0.1,
+                reverse=True,
+            ):
+                self.error_message = "Unable to move to joint state"
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
                 return
