@@ -125,14 +125,14 @@ class RatatouillePlanner(ABC):
         if not self.debug_mode:
             self.robot_mg = RobotMoveGroup()
 
-        self.load_dispensing_params()
+        self.load_known_positions()
         self.load_inventory()
 
     @abstractmethod
     def run(self) -> None:
         pass
 
-    def load_dispensing_params(self):
+    def load_known_positions(self):
         with open(
             file=os.path.join(self.config_dir_path, "poses.yaml"),
             mode="r",
@@ -152,7 +152,6 @@ class RatatouillePlanner(ABC):
             if _inventory:
                 for key in _inventory:
                     self.inventory.positions[key] = _inventory[key]
-        self.pouring_characteristics = {}
 
     def write_inventory(self) -> None:
         # skip writing null values

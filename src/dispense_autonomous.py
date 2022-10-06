@@ -17,16 +17,14 @@ from motion.utils import make_pose, offset_pose, offset_pose_relative
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
-from planner.planner import DispensingStates, RatatouillePlanner
+from planner.planner import DispensingStates, IngredientTypes, RatatouillePlanner
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
-_DISPENSE_THRESHOLD = 50
-_INGREDIENT_DETECTION_TIMEOUT_SECONDS = 5
-# _MARKER_DETECTION_TIMEOUT_SECONDS = 5
 _OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
+_CONTAINER_PREGRASP_OFFSET_Z = 0.175
 
 
 class Container:
@@ -54,8 +52,7 @@ class Container:
 class DispensingRequest:
     ingredient_id: int = None
     ingredient_name: str = None
-    container_expected_pose: List[float] = None
-    container_pregrasp_pose: Pose = None
+    ingredient_pose: List[float] = None
     quantity: float = None
 
     def __init__(
@@ -63,13 +60,12 @@ class DispensingRequest:
         ingredient_id: int,
         ingredient_name: str,
         quantity: float,
-        container_pose: List[float],
+        ingredient_pose: List[float],
     ) -> None:
         self.ingredient_id = ingredient_id
         self.ingredient_name = ingredient_name
         self.quantity = quantity
-        self.container_expected_pose = container_pose
-        self.container_pregrasp_pose = None
+        self.ingredient_pose = ingredient_pose
 
 
 class DispensingStateMachine(RatatouillePlanner):
@@ -79,7 +75,7 @@ class DispensingStateMachine(RatatouillePlanner):
     verbose = None
     stop_and_proceed = None
     disable_external_input = None
-    
+
     pouring_characteristics = None
 
     # state variables
@@ -100,7 +96,7 @@ class DispensingStateMachine(RatatouillePlanner):
         stop_and_proceed: bool = False,
         debug_mode: bool = False,
         disable_external_input: bool = False,
-        bypass_dispensing: bool = False
+        bypass_dispensing: bool = False,
     ) -> None:
 
         super().__init__(config_dir_path, debug_mode, disable_gripper, verbose)
@@ -150,7 +146,7 @@ class DispensingStateMachine(RatatouillePlanner):
         elif self.state == DispensingStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
                 # TODO: send prompt to display menu to external interface
-                
+
                 # TODO: receive user input from external interface
                 # self.log("Waiting for user input from the input board")
                 # user_request: UserInput = rospy.wait_for_message(
@@ -184,21 +180,21 @@ class DispensingStateMachine(RatatouillePlanner):
                     _ingredient_name = self.inventory.positions[position].name
                     print(f"{position}: {_ingredient_name}")
                 print("-" * 80)
-                _raw_input_ingredient_id = input("Enter ingredient number: ")
-                _raw_input_ingredient_quantity = input("Enter quantity in grams: ")
+                _raw_input_ingredient_id = int(input("Enter ingredient number: "))
+                _raw_input_ingredient_quantity = float(
+                    input("Enter quantity in grams: ")
+                )
 
                 # validate user input
                 try:
-                    ingredient = list(
-                        filter(
-                            lambda x: x["id"] == int(_raw_input_ingredient_id),
-                            self.known_poses["cartesian"]["ingredients"],
-                        )
-                    )[0]
                     self.request = DispensingRequest(
-                        ingredient_id=ingredient["id"],
-                        ingredient_name=ingredient["name"].lower(),
-                        container_pose=ingredient["view_pose"],
+                        ingredient_id=_raw_input_ingredient_id,
+                        ingredient_name=self.inventory.positions[
+                            _raw_input_ingredient_id
+                        ].name,
+                        ingredient_pose=self.known_poses["cartesian"]["positions"][
+                            _raw_input_ingredient_id
+                        ],
                         quantity=float(_raw_input_ingredient_quantity),
                     )
                 except:
@@ -211,14 +207,14 @@ class DispensingStateMachine(RatatouillePlanner):
                 self.state = DispensingStates.HOME
             else:
                 self.state = DispensingStates.LOG_ERROR
-            
+
         elif self.state == DispensingStates.PICK_CONTAINER:
             self._robot_open_gripper(wait=False)
 
             self.container_pregrasp_pose = offset_pose(
                 make_pose(
-                    self.ingredient_position["view_pose"][:3],
-                    self.ingredient_position["view_pose"][3:],
+                    self.request.ingredient_pose[:3],
+                    self.request.ingredient_pose[3:],
                 ),
                 _OFFSET_CONTAINER_VIEW,
             )
@@ -226,7 +222,7 @@ class DispensingStateMachine(RatatouillePlanner):
             # Move to pregrasp position
             self.log("Moving to pregrasp position")
             if not self._robot_go_to_pose_goal(
-                pose=self.container_pregrasp_pose.pose, acc_scaling=0.1
+                pose=self.container_pregrasp_pose, acc_scaling=0.1
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
@@ -236,7 +232,7 @@ class DispensingStateMachine(RatatouillePlanner):
             # Compute pose of container using fixed offset from the pre-grasp frame
             # w.r.t base_link
             pose_marker_wrist_frame = Pose()
-            pose_marker_wrist_frame.position.z = 0.175
+            pose_marker_wrist_frame.position.z = _CONTAINER_PREGRASP_OFFSET_Z
             pose_marker_wrist_frame.orientation.w = 1
 
             pose_marker_base_frame = self.pose_transformer.transform_pose_to_frame(
@@ -466,20 +462,17 @@ class DispensingStateMachine(RatatouillePlanner):
         return
 
     def load_pouring_characteristics(self):
-        for position in self.inventory.positions:
-            if self.inventory.positions[position] is None:
-                continue
-            _ingredient_name = self.inventory.positions[position].name
+        self.pouring_characteristics = {}
+        for ingredient in IngredientTypes:
             with open(
                 file=os.path.join(
-                    self.config_dir_path,
-                    "ingredient_params",
-                    _ingredient_name + ".yaml",
+                    self.config_dir_path, "ingredient_params", f"{ingredient}.yaml"
                 ),
                 mode="r",
             ) as f:
                 ingredient_params = yaml.safe_load(f)
-                self.pouring_characteristics[_ingredient_name] = ingredient_params
+                self.pouring_characteristics[ingredient] = ingredient_params
+
 
 if __name__ == "__main__":
     # start ROS node
@@ -537,7 +530,7 @@ if __name__ == "__main__":
         stop_and_proceed=args.stop_and_proceed,
         debug_mode=args.debug,
         disable_external_input=args.disable_external_input,
-        bypass_dispensing=args.bypass_dispensing
+        bypass_dispensing=args.bypass_dispensing,
     )
 
     # reset robot position on start
