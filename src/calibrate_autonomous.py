@@ -47,7 +47,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
     # dependencies
     robot_mg = None
-    known_poses = None
+    known_poses = None  # read from file, pose where we view container
     pose_transformer = None
 
     # state variables
@@ -86,6 +86,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.ingredient_position = None
         self.ingredient_name = None
         self.error_message = None
+
+        # temporary variables
+        self.ingredient_actual_position = None
+        self.ingredient_placed_position = None
 
     def __get_next_ingredient_position(self) -> int:
         print(f"Calibration: {self.inventory.positions}")
@@ -126,14 +130,22 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 # go to next position
                 self.state = InventoryUpdateStates.VISIT_NEXT_CONTAINER
 
-        elif self.state == InventoryUpdateStates.WRITE_CALIBRATION_DATA:
+        elif self.state == InventoryUpdateStates.WRITE_INVENTORY_DATA:
 
             # update inventory of current position
             self.inventory.positions[self.ingredient_id] = Container(
                 self.ingredient_name,
                 self.ingredient_quantity,
+                self.ingredient_placed_position,
             )
             self.write_inventory()
+
+            # reset state variables
+            self.ingredient_id = None
+            self.ingredient_name = None
+            self.ingredient_actual_position = None
+            self.ingredient_placed_position = None
+
             self.state = InventoryUpdateStates.HOME
 
         elif self.state == InventoryUpdateStates.VISIT_NEXT_CONTAINER:
@@ -197,7 +209,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 # return
                 self.ingredient_name = IngredientTypes.NO_CONTAINER
                 self.ingredient_quantity = 0
-                self.state = InventoryUpdateStates.WRITE_CALIBRATION_DATA
+                self.state = InventoryUpdateStates.WRITE_INVENTORY_DATA
 
         elif self.state == InventoryUpdateStates.LABEL_INGREDIENT:
             # Debugging code to bypass verfication
@@ -240,7 +252,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             if self.debug_bypass_picking:
                 self.log(f"Container picking bypassed.")
                 self.ingredient_quantity = 100
-                self.state = InventoryUpdateStates.WRITE_CALIBRATION_DATA
+                self.state = InventoryUpdateStates.WRITE_INVENTORY_DATA
                 return
 
             self.log("Opening gripper")
@@ -314,20 +326,6 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.state = InventoryUpdateStates.LOG_ERROR
                 return
 
-            # go back out of shelf
-            self.log("Backing out of the shelf")
-            if not self._robot_go_to_pose_goal(
-                offset_pose(
-                    self.robot_mg.get_current_pose(),
-                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, 0],
-                ),
-                acc_scaling=0.1,
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.error_state = self.state
-                self.state = InventoryUpdateStates.LOG_ERROR
-                return
-
             # go home in cartesian order
             if not self._go_to_pose_cartesian_order(
                 make_pose(
@@ -375,9 +373,6 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
                 return
-
-            # wait before opening gripper
-            # time.sleep(5);
 
             self._robot_open_gripper(wait=True)
 
@@ -477,24 +472,21 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self.log("Opening gripper")
             self._robot_open_gripper(wait=True)
 
+            _temp: Pose = self.robot_mg.get_current_pose()
+            self.ingredient_placed_position = [
+                _temp.position.x,
+                _temp.position.y,
+                _temp.position.z,
+                _temp.orientation.x,
+                _temp.orientation.y,
+                _temp.orientation.z,
+                _temp.orientation.w,
+            ]
+
             # Remove container once replaced
             self.has_container = False
 
-            # Move back out of the shelf
-            self.log("Backing out of the shelf")
-            if not self._robot_go_to_pose_goal(
-                offset_pose(
-                    self.robot_mg.get_current_pose(),
-                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
-                ),
-                acc_scaling=0.1,
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.error_state = self.state
-                self.state = InventoryUpdateStates.LOG_ERROR
-                return
-
-            self.state = InventoryUpdateStates.WRITE_CALIBRATION_DATA
+            self.state = InventoryUpdateStates.WRITE_INVENTORY_DATA
 
         elif self.state == InventoryUpdateStates.LOG_ERROR:
             if self.error_state == InventoryUpdateStates.CHECK_QUANTITY:

@@ -61,14 +61,14 @@ stateDiagram-v2
 
     VISIT_NEXT_CONTAINER --> container_detected: Container detected?
     container_detected --> LABEL_INGREDIENT: True
-    container_detected --> WRITE_CALIBRATION_DATA: False
+    container_detected --> WRITE_INVENTORY_DATA: False
     LABEL_INGREDIENT --> ingredient_missing: Ingredient missing?
     ingredient_missing --> HOME: True
     ingredient_missing --> PICK_CONTAINER: False
     PICK_CONTAINER --> CHECK_QUANTITY
 
-    REPLACE_CONTAINER --> WRITE_CALIBRATION_DATA: has_container = False
-    WRITE_CALIBRATION_DATA --> HOME
+    REPLACE_CONTAINER --> WRITE_INVENTORY_DATA: has_container = False
+    WRITE_INVENTORY_DATA --> HOME
 
     CHECK_QUANTITY --> HOME: has_container = True
 
