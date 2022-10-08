@@ -3,7 +3,7 @@ import yaml
 import os
 
 from enum import Enum, auto
-from typing import Dict
+from typing import Dict, List
 from geometry_msgs.msg import Pose
 from tf.transformations import *
 
@@ -56,7 +56,7 @@ class DispensingStates(Enum):
 
 class InventoryUpdateStates(Enum):
     HOME = auto()
-    WRITE_CALIBRATION_DATA = auto()
+    WRITE_INVENTORY_DATA = auto()
     VISIT_NEXT_CONTAINER = auto()
     LABEL_INGREDIENT = auto()
     PICK_CONTAINER = auto()
@@ -70,10 +70,12 @@ class Container(yaml.YAMLObject):
     yaml_tag = "!container"
     name: str = None
     quantity: float = None
+    pose: List[float] = None
 
-    def __init__(self, _name: IngredientTypes, _quantity: float):
+    def __init__(self, _name: IngredientTypes, _quantity: float, observed_pose: List[float]):
         self.name = str(_name)
         self.quantity = _quantity
+        self.pose = observed_pose
 
     def __repr__(self) -> str:
         return f"name: {self.name}, quantity: {self.quantity}"
@@ -161,7 +163,7 @@ class RatatouillePlanner(ABC):
         ) as _temp:
             yaml.dump(_inventory, _temp)
         if self.verbose:
-            print(f"Inventory updated to disk: {_inventory}")
+            print(f"Inventory updated on disk: {_inventory}")
 
     def print_current_state_banner(self):
         print("\n" + "-" * 80)

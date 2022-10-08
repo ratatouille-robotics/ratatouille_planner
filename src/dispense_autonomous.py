@@ -27,32 +27,9 @@ _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 _CONTAINER_PREGRASP_OFFSET_Z = 0.175
 
 
-class Container:
-    ingredient_id: int = None
-    ingredient_name: str = None
-    container_expected_pose: List[float] = None
-    container_pregrasp_pose: PoseStamped = None
-    container_observed_pose: List[float] = None
-
-    def __init__(
-        self,
-        ingredient_id: int,
-        ingredient_name: str,
-        container_expected_pose: List[float],
-        container_pregrasp_pose: PoseStamped,
-        container_observed_pose: List[float],
-    ) -> None:
-        self.ingredient_name = ingredient_name
-        self.id = ingredient_id
-        self.container_expected_pose = container_expected_pose
-        self.container_pregrasp_pose = container_pregrasp_pose
-        self.container_observed_pose = container_observed_pose
-
-
 class DispensingRequest:
     ingredient_id: int = None
     ingredient_name: str = None
-    ingredient_pose: List[float] = None
     quantity: float = None
 
     def __init__(
@@ -81,11 +58,9 @@ class DispensingStateMachine(RatatouillePlanner):
     # state variables
     state: DispensingStates = None
     request: DispensingRequest = None
-    container: Container = None
+    container: int = None
     error_message: str = None
     ingredient_quantities: dict = None
-
-    # log files
 
     def __init__(
         self,
@@ -110,7 +85,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
         # initialize state variables
         self.state = state
-        self.container = None
+        self.container = -1
         self.request = None
         self.error_message = None
 
@@ -132,7 +107,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 self.state = DispensingStates.LOG_ERROR
                 return
 
-            if self.container is None:
+            if self.container < 0:
                 if self.request is None:
                     self.state = DispensingStates.AWAIT_USER_INPUT
                 else:
@@ -192,9 +167,9 @@ class DispensingStateMachine(RatatouillePlanner):
                         ingredient_name=self.inventory.positions[
                             _raw_input_ingredient_id
                         ].name,
-                        ingredient_pose=self.known_poses["cartesian"]["positions"][
+                        ingredient_pose=self.inventory.positions[
                             _raw_input_ingredient_id
-                        ],
+                        ].pose,
                         quantity=float(_raw_input_ingredient_quantity),
                     )
                 except:
@@ -211,49 +186,15 @@ class DispensingStateMachine(RatatouillePlanner):
         elif self.state == DispensingStates.PICK_CONTAINER:
             self._robot_open_gripper(wait=False)
 
-            self.container_pregrasp_pose = offset_pose(
-                make_pose(
-                    self.request.ingredient_pose[:3],
-                    self.request.ingredient_pose[3:],
-                ),
-                _OFFSET_CONTAINER_VIEW,
-            )
-
-            # Move to pregrasp position
-            self.log("Moving to pregrasp position")
-            if not self._robot_go_to_pose_goal(
-                pose=self.container_pregrasp_pose, acc_scaling=0.1
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.state = DispensingStates.LOG_ERROR
-                return
-
-            # Compute actual container position from pre-grasp position
-            # Compute pose of container using fixed offset from the pre-grasp frame
-            # w.r.t base_link
-            pose_marker_wrist_frame = Pose()
-            pose_marker_wrist_frame.position.z = _CONTAINER_PREGRASP_OFFSET_Z
-            pose_marker_wrist_frame.orientation.w = 1
-
-            pose_marker_base_frame = self.pose_transformer.transform_pose_to_frame(
-                pose_source=pose_marker_wrist_frame,
-                header_frame_id="wrist_3_link",
-                base_frame_id="base_link",
-            )
-
-            # correct gripper angling upward issue by adding pitch correction to tilt
-            # the gripper upward
-            pose_marker_base_frame.pose = self._correct_gripper_angle_tilt(
-                pose_marker_base_frame.pose
-            )
-
-            # save actual container position to access later in PICK_CONTAINER state
-            self.container_observed_pose = pose_marker_base_frame.pose
-
             # Move to container position
-            self.log("Moving to pick container from actual container position")
-            if not self._robot_go_to_pose_goal(
-                pose=self.container_observed_pose, acc_scaling=0.05
+            self.log("Moving to pick container from container position")
+            _temp = self.inventory.positions[self.request.ingredient_id].pose
+            if not self._go_to_pose_cartesian_order(
+                goal=make_pose(
+                    _temp[:3],
+                    _temp[3:],
+                ),
+                acceleration_scaling_factor=0.05,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
@@ -263,36 +204,14 @@ class DispensingStateMachine(RatatouillePlanner):
             self._robot_close_gripper(wait=True)
 
             # Set container
-            self.container = Container(
-                ingredient_name=self.request.ingredient_name,
-                ingredient_id=self.request.ingredient_id,
-                container_expected_pose=self.request.container_expected_pose,
-                container_pregrasp_pose=self.container_pregrasp_pose,
-                container_observed_pose=self.container_observed_pose,
-            )
+            self.container = self.request.ingredient_id
 
-            # Move to expected ingredient position
-            self.log("Moving to expected ingredient position")
-            temp_pose = make_pose(
-                [
-                    self.request.container_expected_pose[0],
-                    self.request.container_expected_pose[1],
-                    self.request.container_expected_pose[2] + _CONTAINER_LIFT_OFFSET,
-                ],
-                self.request.container_expected_pose[3:],
-            )
-            temp_pose = self._correct_gripper_angle_tilt(temp_pose)
-            if not self._robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
-                self.error_message = "Error moving to pose goal"
-                self.state = DispensingStates.LOG_ERROR
-                return
-
-            # go back out of shelf
-            self.log("Backing out of the shelf")
+            # Lift to avoid hitting shelf while going to HOME orientation
+            self.log("Lifting container above shelf position")
             if not self._robot_go_to_pose_goal(
                 offset_pose(
                     self.robot_mg.get_current_pose(),
-                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, 0],
+                    [0, 0, _CONTAINER_LIFT_OFFSET],
                 ),
                 acc_scaling=0.1,
             ):
@@ -303,10 +222,6 @@ class DispensingStateMachine(RatatouillePlanner):
             self.state = DispensingStates.HOME
 
         elif self.state == DispensingStates.DISPENSE:
-            # # # TODO-nevalsar Remove
-            # self.request = None
-            # self.state = DispensingStates.HOME
-            # return
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
@@ -316,6 +231,16 @@ class DispensingStateMachine(RatatouillePlanner):
                 self.error_message = "Unable to move to joint state"
                 self.state = DispensingStates.LOG_ERROR
                 return
+
+            # debugging code to bypass dispensing
+            if self.debug_bypass_dispensing:
+                self.request = None
+                self.state = DispensingStates.HOME
+                ratatouille._robot_go_to_joint_state(
+                    ratatouille.known_poses["joint"]["home"]
+                )
+                return
+            # End debugging code to bypass dispensing
 
             # Move to dispense position
             self.log(
@@ -340,16 +265,6 @@ class DispensingStateMachine(RatatouillePlanner):
             self.log(
                 f"Dispensing [{self.request.quantity}] grams of [{self.request.ingredient_name}]"
             )
-
-            # debugging code to bypass dispensing
-            if self.debug_bypass_dispensing:
-                self.request = None
-                self.state = DispensingStates.HOME
-                ratatouille._robot_go_to_joint_state(
-                    ratatouille.known_poses["joint"]["home"]
-                )
-                return
-            # End debugging code to bypass dispensing
 
             dispenser = Dispenser(self.robot_mg)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
@@ -387,42 +302,46 @@ class DispensingStateMachine(RatatouillePlanner):
             )
 
         elif self.state == DispensingStates.REPLACE_CONTAINER:
-            # correct the z-height of the container_expected_pose using container_observed_pose z-height
-            self.container.container_expected_pose[
-                2
-            ] = self.container.container_observed_pose.position.z
-
             # Move up a little to prevent container hitting the shelf
-            self.log(
-                "Moving a little above expected view (to avoid hitting shelf while replacing container)"
-            )
+            # self.log(
+            #     "Moving a little above expected view (to avoid hitting shelf while replacing container)"
+            # )
+
+            # _temp = self.inventory.positions[self.container].pose
+            # # if recovering from error, use previous container id
+            # if not self._go_to_pose_cartesian_order(
+            #     offset_pose(
+            #         make_pose(_temp[:3], _temp[3:]),
+            #         [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
+            #     ),
+            #     acceleration_scaling_factor=0.1,
+            # ):
+            #     self.error_message = "Error moving to pose goal"
+            #     self.state = DispensingStates.LOG_ERROR
+            #     return
+
+            # # Move to ingredient position
+            # self.log("Moving to replace container at ingredient position")
+
+            # # revert correction for gripper angle tilt
+            # _temp_pose = self._correct_gripper_angle_tilt(
+            #     self.robot_mg.get_current_pose(), reverse=False
+            # )
+
+            # if not self._robot_go_to_pose_goal(
+            #     offset_pose(
+            #         _temp_pose,
+            #         [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
+            #     )
+            # ):
+            #     self.error_message = "Error moving to pose goal"
+            #     self.state = DispensingStates.LOG_ERROR
+            #     return
+
+            _temp = self.inventory.positions[self.container].pose
             if not self._go_to_pose_cartesian_order(
-                offset_pose(
-                    make_pose(
-                        self.container.container_expected_pose[:3],
-                        self.container.container_expected_pose[3:],
-                    ),
-                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
-                ),
+                make_pose(_temp[:3], _temp[3:]),
                 acceleration_scaling_factor=0.1,
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.state = DispensingStates.LOG_ERROR
-                return
-
-            # Move to ingredient position
-            self.log("Moving to replace container at ingredient position")
-
-            # revert correction for gripper angle tilt
-            _temp_pose = self._correct_gripper_angle_tilt(
-                self.robot_mg.get_current_pose(), reverse=False
-            )
-
-            if not self._robot_go_to_pose_goal(
-                offset_pose(
-                    _temp_pose,
-                    [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
-                )
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
@@ -433,20 +352,7 @@ class DispensingStateMachine(RatatouillePlanner):
             self._robot_open_gripper(wait=True)
 
             # Remove container once replaced
-            self.container = None
-
-            # Move back out of the shelf
-            self.log("Backing out of the shelf")
-            if not self._robot_go_to_pose_goal(
-                offset_pose(
-                    self.robot_mg.get_current_pose(),
-                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
-                ),
-                acc_scaling=0.1,
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.state = DispensingStates.LOG_ERROR
-                return
+            self.container = -1
 
             self.state = DispensingStates.HOME
 
