@@ -178,8 +178,15 @@ class DispensingStateMachine(RatatouillePlanner):
                 # generate dispensing requests for each ingredient
                 try:
                     for _ingredient in _selected_recipe["ingredients"]:
+                        # check if ingredient is in inventory
                         _temp_id = self.get_position_of_ingredient(_ingredient["name"])
                         if _temp_id is None:
+                            raise
+                        # check if sufficient quantity is in inventory
+                        if (
+                            self.inventory.positions[_temp_id].quantity
+                            < _ingredient["quantity"]
+                        ):
                             raise
                         request = DispensingRequest(
                             ingredient_id=_temp_id,
@@ -193,7 +200,7 @@ class DispensingStateMachine(RatatouillePlanner):
                         0
                     ].guid  # index of first ingredient to be dispenses
                 except:
-                    self.error_message = "Missing ingredient - cannot prepare recipe."
+                    self.error_message = "Missing ingredient/ insufficient quantity - cannot prepare recipe."
 
                 # print selected recipe
                 self.log(f"Selected recipe: {_selected_recipe['name']}".center(80))
