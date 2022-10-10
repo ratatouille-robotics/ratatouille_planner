@@ -73,7 +73,9 @@ class Container(yaml.YAMLObject):
     quantity: float = None
     pose: List[float] = None
 
-    def __init__(self, _name: IngredientTypes, _quantity: float, observed_pose: List[float]):
+    def __init__(
+        self, _name: IngredientTypes, _quantity: float, observed_pose: List[float]
+    ):
         self.name = str(_name)
         self.quantity = _quantity
         self.pose = observed_pose
@@ -161,6 +163,18 @@ class RatatouillePlanner(ABC):
             if _inventory:
                 for key in _inventory:
                     self.inventory.positions[key] = _inventory[key]
+
+    def get_position_of_ingredient(self, ingredient_name: str):
+        try:
+            _temp = list(
+                filter(
+                    lambda x: x[1].name == ingredient_name,
+                    self.inventory.positions.items(),
+                )
+            )[0]
+        except:
+            return None
+        return _temp[0]
 
     def write_inventory(self) -> None:
         # skip writing null values

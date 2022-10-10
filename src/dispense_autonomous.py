@@ -175,34 +175,37 @@ class DispensingStateMachine(RatatouillePlanner):
                 except:
                     self.error_message = "Unable to parse user input."
 
+                # generate dispensing requests for each ingredient
+                try:
+                    for _ingredient in _selected_recipe["ingredients"]:
+                        _temp_id = self.get_position_of_ingredient(_ingredient["name"])
+                        if _temp_id is None:
+                            raise
+                        request = DispensingRequest(
+                            ingredient_id=_temp_id,
+                            ingredient_name=self.inventory.positions[_temp_id].name,
+                            quantity=_ingredient["quantity"],
+                            ingredient_pose=self.inventory.positions[_temp_id].pose,
+                        )
+                        self.request.append(request)
+                    assert len(self.request) > 0
+                    self.status_request = self.request[
+                        0
+                    ].guid  # index of first ingredient to be dispenses
+                except:
+                    self.error_message = "Missing ingredient - cannot prepare recipe."
+
                 # print selected recipe
                 self.log(f"Selected recipe: {_selected_recipe['name']}".center(80))
                 self.log(f"{'-' * 40}".center(80))
                 for _ingredient in _selected_recipe["ingredients"]:
+                    _temp_id = self.get_position_of_ingredient(_ingredient["name"])
                     self.log(
-                        f"Ingredient ({_ingredient['id']}) {self.inventory.positions[_ingredient['id']].name}: {_ingredient['quantity']} grams".center(
+                        f"Ingredient ({_temp_id}) {_ingredient['name']}: {_ingredient['quantity']} grams".center(
                             80
                         )
                     )
                 self.log(f"{'-' * 40}".center(80))
-
-                # generate dispensing requests for each ingredient
-                for _ingredient in _selected_recipe["ingredients"]:
-                    request = DispensingRequest(
-                        ingredient_id=_ingredient["id"],
-                        ingredient_name=self.inventory.positions[
-                            _ingredient["id"]
-                        ].name,
-                        quantity=_ingredient["quantity"],
-                        ingredient_pose=self.inventory.positions[
-                            _ingredient["id"]
-                        ].pose,
-                    )
-                    self.request.append(request)
-                assert len(self.request) > 0
-                self.status_request = self.request[
-                    0
-                ].guid  # index of first ingredient to be dispenses
 
             if self.error_message is None:
                 self.log(
