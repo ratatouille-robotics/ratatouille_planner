@@ -277,11 +277,14 @@ class DispensingStateMachine(RatatouillePlanner):
                 f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request.quantity}] grams)"
             )
 
-            # update ingredient quantities
-            self.ingredient_quantities[
-                self.request.ingredient_name
-            ] -= actual_dispensed_quantity
-            self.log(f"Updated ingredient quantities : {self.ingredient_quantities}")
+            # update ingredient quantity in inventory
+            self.inventory.positions[
+                self.request.ingredient_id
+            ].quantity -= actual_dispensed_quantity
+            self.write_inventory()
+            self.log(
+                f"Updated ingredient quantities : {self.inventory.positions[self.request.ingredient_id]}"
+            )
 
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
@@ -291,8 +294,6 @@ class DispensingStateMachine(RatatouillePlanner):
                 self.error_message = "Unable to move to joint state"
                 self.state = DispensingStates.LOG_ERROR
                 return
-
-            # TODO: update inventory
 
             # Since dispensing is complete, clear user request
             self.request = None

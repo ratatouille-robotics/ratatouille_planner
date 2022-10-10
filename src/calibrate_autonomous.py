@@ -85,6 +85,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.ingredient_id = None
         self.ingredient_position = None
         self.ingredient_name = None
+        self.ingredient_quantity = None
         self.error_message = None
 
         # temporary variables
@@ -399,7 +400,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
 
-            self.ingredient_quantity = 100
+            self.ingredient_quantity = 100.0 # float
 
             self._robot_close_gripper(wait=True)
 
