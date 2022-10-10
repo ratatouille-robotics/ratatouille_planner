@@ -12,6 +12,7 @@ from ratatouille_pose_transforms.transforms import PoseTransforms
 from motion.utils import make_pose, offset_pose, offset_pose_relative
 
 _INVENTORY_FILE_PATH = "inventory.yaml"
+_RECIPE_FILE_PATH = "recipes.yaml"
 _CALIBRATION_START_CONTAINER = 1
 _CALIBRATION_END_CONTAINER = 15
 
@@ -108,6 +109,7 @@ class RatatouillePlanner(ABC):
     pose_transformer = None
     robot_mg = None
     known_poses = None
+    recipes = None
     inventory = Shelf(_CALIBRATION_START_CONTAINER, _CALIBRATION_END_CONTAINER)
 
     def __init__(
@@ -129,6 +131,7 @@ class RatatouillePlanner(ABC):
 
         self.load_known_positions()
         self.load_inventory()
+        self.load_recipes()
 
     @abstractmethod
     def run(self) -> None:
@@ -140,9 +143,13 @@ class RatatouillePlanner(ABC):
             mode="r",
         ) as _temp:
             self.known_poses = yaml.safe_load(_temp)
-            # self.known_poses["cartesian"]["ingredients"] = sorted(
-            #     self.known_poses["cartesian"]["ingredients"], key=lambda x: x["id"]
-            # )
+
+    def load_recipes(self):
+        with open(
+            file=os.path.join(self.config_dir_path, _RECIPE_FILE_PATH),
+            mode="r",
+        ) as _temp:
+            self.recipes = yaml.load(_temp)
 
     def load_inventory(self):
         with open(

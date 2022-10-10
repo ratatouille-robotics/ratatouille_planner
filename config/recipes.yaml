@@ -1,0 +1,14 @@
+- id: 1
+  name: Poha
+  ingredients:
+  - id: 6
+    quantity: 40
+  - id: 7
+    quantity: 23
+- id: 2
+  name: Pasta
+  ingredients:
+  - id: 2
+    quantity: 10
+  - id: 3
+    quantity: 5

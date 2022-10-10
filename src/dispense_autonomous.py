@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import uuid
+from collections import deque
+from urllib import request
 import rospy
 import rospkg
 import argparse
@@ -31,6 +34,7 @@ class DispensingRequest:
     ingredient_id: int = None
     ingredient_name: str = None
     quantity: float = None
+    guid: uuid.UUID = None
 
     def __init__(
         self,
@@ -43,6 +47,7 @@ class DispensingRequest:
         self.ingredient_name = ingredient_name
         self.quantity = quantity
         self.ingredient_pose = ingredient_pose
+        self.guid = uuid.uuid4()
 
 
 class DispensingStateMachine(RatatouillePlanner):
@@ -57,7 +62,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
     # state variables
     state: DispensingStates = None
-    request: DispensingRequest = None
+    request: List[DispensingRequest] = None
     container: int = None
     error_message: str = None
     ingredient_quantities: dict = None
@@ -85,8 +90,9 @@ class DispensingStateMachine(RatatouillePlanner):
 
         # initialize state variables
         self.state = state
-        self.container = -1
-        self.request = None
+        self.status_container = -1
+        self.status_request = -1
+        self.request = deque()
         self.error_message = None
 
     def run(self) -> None:
@@ -107,13 +113,16 @@ class DispensingStateMachine(RatatouillePlanner):
                 self.state = DispensingStates.LOG_ERROR
                 return
 
-            if self.container < 0:
-                if self.request is None:
+            if self.status_container < 0:
+                if len(self.request) == 0:
                     self.state = DispensingStates.AWAIT_USER_INPUT
                 else:
                     self.state = DispensingStates.PICK_CONTAINER
             else:
-                if self.request is None:
+                if len(self.request) == 0:
+                    self.state = DispensingStates.REPLACE_CONTAINER
+                elif self.status_request != self.request[0].guid:
+                    self.status_request = self.request[0].guid
                     self.state = DispensingStates.REPLACE_CONTAINER
                 else:
                     self.state = DispensingStates.DISPENSE
@@ -148,36 +157,56 @@ class DispensingStateMachine(RatatouillePlanner):
                 raise NotImplementedError
             else:
                 # print menu and read input from command line
-                print(" INGREDIENTS: ".center(80, "-"))
-                for position in self.inventory.positions:
-                    if self.inventory.positions[position] is None:
-                        continue
-                    _ingredient_name = self.inventory.positions[position].name
-                    print(f"{position}: {_ingredient_name}")
-                print("-" * 80)
-                _raw_input_ingredient_id = int(input("Enter ingredient number: "))
-                _raw_input_ingredient_quantity = float(
-                    input("Enter quantity in grams: ")
-                )
 
-                # validate user input
+                print(" MENU".center(80, "-"))
+                for recipe in self.recipes:
+                    print(f"Recipe ID {recipe['id']}: {recipe['name']}".center(80))
+                print("-" * 80)
+                _selected_recipe_id = int(input("Enter recipe ID: "))
+
+                # parse user input
                 try:
-                    self.request = DispensingRequest(
-                        ingredient_id=_raw_input_ingredient_id,
-                        ingredient_name=self.inventory.positions[
-                            _raw_input_ingredient_id
-                        ].name,
-                        ingredient_pose=self.inventory.positions[
-                            _raw_input_ingredient_id
-                        ].pose,
-                        quantity=float(_raw_input_ingredient_quantity),
-                    )
+                    _selected_recipe = list(
+                        filter(
+                            lambda x: x["id"] == _selected_recipe_id,
+                            self.recipes,
+                        )
+                    )[0]
                 except:
                     self.error_message = "Unable to parse user input."
 
+                # print selected recipe
+                self.log(f"Selected recipe: {_selected_recipe['name']}".center(80))
+                self.log(f"{'-' * 40}".center(80))
+                for _ingredient in _selected_recipe["ingredients"]:
+                    self.log(
+                        f"Ingredient ({_ingredient['id']}) {self.inventory.positions[_ingredient['id']].name}: {_ingredient['quantity']} grams".center(
+                            80
+                        )
+                    )
+                self.log(f"{'-' * 40}".center(80))
+
+                # generate dispensing requests for each ingredient
+                for _ingredient in _selected_recipe["ingredients"]:
+                    request = DispensingRequest(
+                        ingredient_id=_ingredient["id"],
+                        ingredient_name=self.inventory.positions[
+                            _ingredient["id"]
+                        ].name,
+                        quantity=_ingredient["quantity"],
+                        ingredient_pose=self.inventory.positions[
+                            _ingredient["id"]
+                        ].pose,
+                    )
+                    self.request.append(request)
+                assert len(self.request) > 0
+                self.status_request = self.request[
+                    0
+                ].guid  # index of first ingredient to be dispenses
+
             if self.error_message is None:
                 self.log(
-                    f"User requested for [{self.request.quantity} grams] of [{self.request.ingredient_name}]"
+                    f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
                 )
                 self.state = DispensingStates.HOME
             else:
@@ -188,7 +217,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
             # Move to container position
             self.log("Moving to pick container from container position")
-            _temp = self.inventory.positions[self.request.ingredient_id].pose
+            _temp = self.inventory.positions[self.request[0].ingredient_id].pose
             if not self._go_to_pose_cartesian_order(
                 goal=make_pose(
                     _temp[:3],
@@ -204,7 +233,7 @@ class DispensingStateMachine(RatatouillePlanner):
             self._robot_close_gripper(wait=True)
 
             # Set container
-            self.container = self.request.ingredient_id
+            self.status_container = self.request[0].ingredient_id
 
             # Lift to avoid hitting shelf while going to HOME orientation
             self.log("Lifting container above shelf position")
@@ -234,7 +263,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
             # debugging code to bypass dispensing
             if self.debug_bypass_dispensing:
-                self.request = None
+                self.request.popleft()
                 self.state = DispensingStates.HOME
                 ratatouille._robot_go_to_joint_state(
                     ratatouille.known_poses["joint"]["home"]
@@ -244,10 +273,10 @@ class DispensingStateMachine(RatatouillePlanner):
 
             # Move to dispense position
             self.log(
-                f"Moving to dispensing position for ingredient [{self.request.ingredient_name}]"
+                f"Moving to dispensing position for ingredient [{self.request[0].ingredient_name}]"
             )
             dispensing_params = self.pouring_characteristics[
-                self.request.ingredient_name
+                self.request[0].ingredient_name
             ]
             _temp = self.known_poses["cartesian"]["pouring"][
                 dispensing_params["container"]
@@ -263,27 +292,27 @@ class DispensingStateMachine(RatatouillePlanner):
 
             # Dispense ingredient
             self.log(
-                f"Dispensing [{self.request.quantity}] grams of [{self.request.ingredient_name}]"
+                f"Dispensing [{self.request[0].quantity}] grams of [{self.request[0].ingredient_name}]"
             )
 
             dispenser = Dispenser(self.robot_mg)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
-                dispensing_params, float(self.request.quantity), log_data=True
+                dispensing_params, float(self.request[0].quantity), log_data=True
             )
             actual_dispensed_quantity = float(actual_dispensed_quantity)
 
-            dispense_error = actual_dispensed_quantity - self.request.quantity
+            dispense_error = actual_dispensed_quantity - self.request[0].quantity
             self.log(
                 f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request.quantity}] grams)"
             )
 
             # update ingredient quantity in inventory
             self.inventory.positions[
-                self.request.ingredient_id
+                self.request[0].ingredient_id
             ].quantity -= actual_dispensed_quantity
             self.write_inventory()
             self.log(
-                f"Updated ingredient quantities : {self.inventory.positions[self.request.ingredient_id]}"
+                f"Updated ingredient quantities : {self.inventory.positions[self.request[0].ingredient_id]}"
             )
 
             # Move to pre-dispense position
@@ -296,7 +325,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 return
 
             # Since dispensing is complete, clear user request
-            self.request = None
+            self.request.popleft()
             self.state = DispensingStates.HOME
             ratatouille._robot_go_to_joint_state(
                 ratatouille.known_poses["joint"]["home"]
@@ -308,7 +337,7 @@ class DispensingStateMachine(RatatouillePlanner):
             #     "Moving a little above expected view (to avoid hitting shelf while replacing container)"
             # )
 
-            # _temp = self.inventory.positions[self.container].pose
+            # _temp = self.inventory.positions[self.status_container].pose
             # # if recovering from error, use previous container id
             # if not self._go_to_pose_cartesian_order(
             #     offset_pose(
@@ -339,7 +368,7 @@ class DispensingStateMachine(RatatouillePlanner):
             #     self.state = DispensingStates.LOG_ERROR
             #     return
 
-            _temp = self.inventory.positions[self.container].pose
+            _temp = self.inventory.positions[self.status_container].pose
             if not self._go_to_pose_cartesian_order(
                 make_pose(_temp[:3], _temp[3:]),
                 acceleration_scaling_factor=0.1,
@@ -353,7 +382,7 @@ class DispensingStateMachine(RatatouillePlanner):
             self._robot_open_gripper(wait=True)
 
             # Remove container once replaced
-            self.container = -1
+            self.status_container = -1
 
             self.state = DispensingStates.HOME
 
@@ -363,7 +392,7 @@ class DispensingStateMachine(RatatouillePlanner):
             input()
             # reset user request after error
             self.error_message = None
-            self.request = None
+            self.request.clear()
             self.state = DispensingStates.HOME
 
         return
