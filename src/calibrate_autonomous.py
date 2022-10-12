@@ -26,7 +26,7 @@ _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
 _DISPENSE_THRESHOLD = 50
 _INGREDIENT_DETECTION_TIMEOUT_SECONDS = 5
-_MARKER_DETECTION_TIMEOUT_SECONDS = 5
+_MARKER_DETECTION_TIMEOUT_SECONDS = 2
 _OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
@@ -109,7 +109,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     self.known_poses["cartesian"]["home"][:3],
                     self.known_poses["cartesian"]["home"][3:],
                 ),
-                acceleration_scaling_factor=0.1,
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
                 reverse=True,
             ):
                 self.error_message = "Unable to move to joint state"
@@ -161,7 +162,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     ),
                     _OFFSET_CONTAINER_VIEW,
                 ),
-                acceleration_scaling_factor=0.1,
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
@@ -189,7 +191,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 not is_marker_detected
                 and time.time() < start_time + _MARKER_DETECTION_TIMEOUT_SECONDS
             ):
-                time.sleep(0.1)
+                time.sleep(0.01)
                 self.container_pregrasp_pose = (
                     self.pose_transformer.transform_pose_to_frame(
                         pose_source=marker_origin,
@@ -262,7 +264,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # Move to pregrasp position
             self.log("Moving to pregrasp position")
             if not self._robot_go_to_pose_goal(
-                pose=self.container_pregrasp_pose.pose, acc_scaling=0.1
+                pose=self.container_pregrasp_pose.pose,
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
@@ -294,7 +298,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # Move to container position
             self.log("Moving to pick container from actual container position")
             if not self._robot_go_to_pose_goal(
-                pose=self.ingredient_actual_position, acc_scaling=0.05
+                pose=self.ingredient_actual_position,
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
@@ -321,7 +327,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # TODO: verify if second correction required
             # temp_pose = self._correct_gripper_angle_tilt(temp_pose)
 
-            if not self._robot_go_to_pose_goal(pose=temp_pose, acc_scaling=0.05):
+            if not self._robot_go_to_pose_goal(pose=temp_pose,
+                acc_scaling=0.1,
+                velocity_scaling=0.9,
+                ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
@@ -333,7 +342,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     self.known_poses["cartesian"]["home"][:3],
                     self.known_poses["cartesian"]["home"][3:],
                 ),
-                acceleration_scaling_factor=0.1,
+                acceleration_scaling_factor=0.2,
+                velocity_scaling=0.9,
                 reverse=True,
             ):
                 self.error_message = "Unable to move to joint state"
@@ -355,7 +365,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             self.log("Moving to pre-sense position")
             if not self._robot_go_to_joint_state(
-                self.known_poses["joint"]["pre_sense"]
+                self.known_poses["joint"]["pre_sense"],
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Unable to move to joint state"
                 self.error_state = self.state
@@ -369,6 +381,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     self.known_poses["cartesian"]["sense"][3:],
                 ),
                 orient_tolerance=0.05,
+                acc_scaling=0.1,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Unable to move to pose goal"
                 self.error_state = self.state
@@ -406,7 +420,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             self.log("Moving to pre-sense position")
             if not self._robot_go_to_joint_state(
-                self.known_poses["joint"]["pre_sense"]
+                self.known_poses["joint"]["pre_sense"],
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Unable to move to joint state"
                 self.error_state = self.state
@@ -422,7 +438,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             self.log(f"Estimated weight: {self.ingredient_quantity}")
 
-            self._robot_go_to_joint_state(self.known_poses["joint"]["home"])
+            self._robot_go_to_joint_state(self.known_poses["joint"]["home"],
+            acc_scaling=0.3,
+            velocity_scaling=0.9,
+            )
 
             self.state = InventoryUpdateStates.HOME
 
@@ -443,7 +462,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     ),
                     [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
                 ),
-                acceleration_scaling_factor=0.1,
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
@@ -462,7 +482,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 offset_pose(
                     _temp_pose,
                     [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
-                )
+                ),
+                acc_scaling=0.1,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state

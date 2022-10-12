@@ -204,9 +204,9 @@ class RatatouillePlanner(ABC):
             raise Exception("Poses not loaded.")
         self._robot_go_to_joint_state(self.known_poses["joint"]["home"])
 
-    def _robot_go_to_joint_state(self, pose):
+    def _robot_go_to_joint_state(self, pose,velocity_scaling: float=0.2,acc_scaling: float=0.2):
         if not self.debug_mode:
-            return self.robot_mg.go_to_joint_state(pose)
+            return self.robot_mg.go_to_joint_state(pose, velocity_scaling=velocity_scaling, acc_scaling=acc_scaling)
 
     def _robot_open_gripper(self, wait):
         self.log("Opening gripper")
@@ -221,7 +221,8 @@ class RatatouillePlanner(ABC):
     def _go_to_pose_cartesian_order(
         self,
         goal: Pose,
-        acceleration_scaling_factor: float,
+        acceleration_scaling_factor: float=0.2,
+        velocity_scaling: float=0.2,
         reverse: bool = False,
     ) -> None:
 
@@ -260,6 +261,7 @@ class RatatouillePlanner(ABC):
             if not self._robot_go_to_pose_goal(
                 offset_pose(self.robot_mg.get_current_pose(), offset),
                 acc_scaling=acceleration_scaling_factor,
+                velocity_scaling = velocity_scaling,
             ):
                 return False
         return True
