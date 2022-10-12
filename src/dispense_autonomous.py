@@ -106,7 +106,8 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.known_poses["cartesian"]["home"][:3],
                     self.known_poses["cartesian"]["home"][3:],
                 ),
-                acceleration_scaling_factor=0.1,
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
                 reverse=True,
             ):
                 self.error_message = "Unable to move to joint state"
@@ -233,7 +234,8 @@ class DispensingStateMachine(RatatouillePlanner):
                     _temp[:3],
                     _temp[3:],
                 ),
-                acceleration_scaling_factor=0.05,
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
@@ -252,7 +254,8 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.robot_mg.get_current_pose(),
                     [0, 0, _CONTAINER_LIFT_OFFSET],
                 ),
-                acc_scaling=0.1,
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
@@ -265,7 +268,9 @@ class DispensingStateMachine(RatatouillePlanner):
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
             if not self._robot_go_to_joint_state(
-                self.known_poses["joint"]["pre_dispense"]
+                self.known_poses["joint"]["pre_dispense"],
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Unable to move to joint state"
                 self.state = DispensingStates.LOG_ERROR
@@ -276,7 +281,9 @@ class DispensingStateMachine(RatatouillePlanner):
                 self.request.popleft()
                 self.state = DispensingStates.HOME
                 ratatouille._robot_go_to_joint_state(
-                    ratatouille.known_poses["joint"]["home"]
+                    ratatouille.known_poses["joint"]["home"],
+                    acc_scaling=0.3,
+                    velocity_scaling=0.9,
                 )
                 return
             # End debugging code to bypass dispensing
@@ -328,7 +335,9 @@ class DispensingStateMachine(RatatouillePlanner):
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
             if not self._robot_go_to_joint_state(
-                self.known_poses["joint"]["pre_dispense"]
+                self.known_poses["joint"]["pre_dispense"],
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Unable to move to joint state"
                 self.state = DispensingStates.LOG_ERROR
@@ -338,7 +347,9 @@ class DispensingStateMachine(RatatouillePlanner):
             self.request.popleft()
             self.state = DispensingStates.HOME
             ratatouille._robot_go_to_joint_state(
-                ratatouille.known_poses["joint"]["home"]
+                ratatouille.known_poses["joint"]["home"],
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             )
 
         elif self.state == DispensingStates.REPLACE_CONTAINER:
@@ -381,7 +392,8 @@ class DispensingStateMachine(RatatouillePlanner):
             _temp = self.inventory.positions[self.status_container].pose
             if not self._go_to_pose_cartesian_order(
                 make_pose(_temp[:3], _temp[3:]),
-                acceleration_scaling_factor=0.1,
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
