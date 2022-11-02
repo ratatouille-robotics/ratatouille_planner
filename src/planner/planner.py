@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import uuid
 import yaml
 import os
 
@@ -167,7 +168,7 @@ class RatatouillePlanner(ABC):
         try:
             _temp = list(
                 filter(
-                    lambda x: x[1].name == ingredient_name,
+                    lambda x: x[1] is not None and x[1].name == ingredient_name,
                     self.inventory.positions.items(),
                 )
             )[0]
@@ -321,6 +322,7 @@ class DispensingRequest(RecipeAction):
         quantity: float,
         ingredient_pose: List[float],
     ) -> None:
+        super().__init__()
         self.ingredient_id = ingredient_id
         self.ingredient_name = ingredient_name
         self.quantity = quantity

@@ -65,6 +65,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         disable_external_input: bool = False,
         bypass_picking: bool = False,
         bypass_sensing: bool = False,
+        bypass_id_service: bool = False
     ) -> None:
 
         super().__init__(config_dir_path, debug_mode, disable_gripper, verbose)
@@ -74,6 +75,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.disable_external_input = disable_external_input
         self.debug_bypass_picking = bypass_picking
         self.debug_bypass_sensing = bypass_sensing
+        self.bypass_id_service = bypass_id_service
 
         # initialize dependencies
 
@@ -216,9 +218,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
         elif self.state == InventoryUpdateStates.LABEL_INGREDIENT:
             # Debugging code to bypass verfication
-            # self.state = InventoryUpdateStates.PICK_CONTAINER
-            # return
-            # End debugging code to bypass verfication
+            if self.bypass_id_service:
+                self.ingredient_name = IngredientTypes.SALT
+                self.state = InventoryUpdateStates.PICK_CONTAINER
+                return
 
             start_time = time.time()
 
@@ -390,31 +393,34 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 return
 
             self._robot_open_gripper(wait=True)
+            
+            if self.bypass_id_service:
+                self.ingredient_quantity = 100
+            else:
+                rospy.wait_for_service("ingredient_validation")
+                try:
+                    service_call = rospy.ServiceProxy(
+                        "ingredient_validation", ValidateIngredient
+                    )
+                    response = service_call(
+                        # mode="spectral", ingredient_name=self.ingredient_name
+                        # TODO: remove hack for spectral camera run
+                        mode="spectral",
+                        ingredient_name="salt",
+                    )
+                    # TODO: assign and log correct response from spectral validation
+                    # self.log(f"Spectral camera response: {response.found_ingredient.lower()}")
+                    # self.ingredient_name = response.found_ingredient.lower()
+                    self.log(f"Spectral camera response: {response}")
 
-            rospy.wait_for_service("ingredient_validation")
-            try:
-                service_call = rospy.ServiceProxy(
-                    "ingredient_validation", ValidateIngredient
-                )
-                response = service_call(
-                    # mode="spectral", ingredient_name=self.ingredient_name
-                    # TODO: remove hack for spectral camera run
-                    mode="spectral",
-                    ingredient_name="salt",
-                )
-                # TODO: assign and log correct response from spectral validation
-                # self.log(f"Spectral camera response: {response.found_ingredient.lower()}")
-                # self.ingredient_name = response.found_ingredient.lower()
-                self.log(f"Spectral camera response: {response}")
+                except rospy.ServiceException as e:
+                    self.error_message = (
+                        f"Ingredient detection service call (spectral) failed. Error: {e}"
+                    )
+                    self.error_state = self.state
+                    self.state = InventoryUpdateStates.LOG_ERROR
 
-            except rospy.ServiceException as e:
-                self.error_message = (
-                    f"Ingredient detection service call (spectral) failed. Error: {e}"
-                )
-                self.error_state = self.state
-                self.state = InventoryUpdateStates.LOG_ERROR
-
-            self.ingredient_quantity = 100.0 # float
+                self.ingredient_quantity = 100.0 # float
 
             self._robot_close_gripper(wait=True)
 
@@ -546,6 +552,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--bypass-picking", help="Bypass container picking", action="store_true"
     )
+    parser.add_argument(
+        "--bypass-id-service", help="Bypass ingredient identification", action="store_true"
+    )
     parser.add_argument("--bypass-sensing", help="Bypass sensing", action="store_true")
     parser.add_argument("--verbose", help="Enable verbose output", action="store_true")
     parser.add_argument(
@@ -582,6 +591,7 @@ if __name__ == "__main__":
         disable_external_input=args.disable_external_input,
         bypass_picking=args.bypass_picking,
         bypass_sensing=args.bypass_sensing,
+        bypass_id_service=args.bypass_id_service
     )
 
     # reset robot position on start

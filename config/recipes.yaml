@@ -1,14 +1,14 @@
 - id: 1
   name: Poha
   ingredients:
-  - name: "greenolives"
+  - name: greenolives
     quantity: 40
-  - name: "salt"
-    quantity: 23
+  - name: _wait
+    quantity: 3
 - id: 2
   name: Pasta
   ingredients:
-  - name: "blackpepper"
+  - name: blackpepper
     quantity: 10
   - name: _wait
     quantity: 2

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import uuid
 from collections import deque
 from urllib import request
 import rospy
@@ -98,7 +97,10 @@ class DispensingStateMachine(RatatouillePlanner):
                 if len(self.request) == 0:
                     self.state = DispensingStates.AWAIT_USER_INPUT
                 else:
-                    self.state = DispensingStates.PICK_CONTAINER
+                    if type(self.request[0]) == DispensingDelay:
+                        self.state = DispensingStates.WAIT
+                    else:
+                        self.state = DispensingStates.PICK_CONTAINER
             else:
                 if len(self.request) == 0:
                     self.state = DispensingStates.REPLACE_CONTAINER
@@ -106,12 +108,10 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.status_request = self.request[0].guid
                     self.state = DispensingStates.REPLACE_CONTAINER
                 else:
-                    if type(self.request[0]) == DispensingDelay:
-                        self.state = DispensingStates.WAIT
-                    else:
-                        self.state = DispensingStates.DISPENSE
+                    self.state = DispensingStates.DISPENSE
         
         elif self.state == DispensingStates.WAIT:
+            time.sleep(self.request[0].duration)
             self.request.popleft()
             self.state = DispensingStates.HOME
 
