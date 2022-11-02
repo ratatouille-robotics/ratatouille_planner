@@ -10,5 +10,8 @@
   ingredients:
   - name: "blackpepper"
     quantity: 10
+  - name: _wait
+    quantity: 2
   - name: water
     quantity: 5
+  

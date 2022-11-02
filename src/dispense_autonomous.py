@@ -20,7 +20,7 @@ from motion.utils import make_pose, offset_pose, offset_pose_relative
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
-from planner.planner import DispensingStates, IngredientTypes, RatatouillePlanner
+from planner.planner import DispensingStates, IngredientTypes, RatatouillePlanner, RecipeAction, DispensingRequest, DispensingDelay
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
@@ -28,26 +28,6 @@ _OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 _CONTAINER_PREGRASP_OFFSET_Z = 0.175
-
-
-class DispensingRequest:
-    ingredient_id: int = None
-    ingredient_name: str = None
-    quantity: float = None
-    guid: uuid.UUID = None
-
-    def __init__(
-        self,
-        ingredient_id: int,
-        ingredient_name: str,
-        quantity: float,
-        ingredient_pose: List[float],
-    ) -> None:
-        self.ingredient_id = ingredient_id
-        self.ingredient_name = ingredient_name
-        self.quantity = quantity
-        self.ingredient_pose = ingredient_pose
-        self.guid = uuid.uuid4()
 
 
 class DispensingStateMachine(RatatouillePlanner):
@@ -62,7 +42,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
     # state variables
     state: DispensingStates = None
-    request: List[DispensingRequest] = None
+    request: List[RecipeAction] = None
     container: int = None
     error_message: str = None
     ingredient_quantities: dict = None
@@ -126,7 +106,14 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.status_request = self.request[0].guid
                     self.state = DispensingStates.REPLACE_CONTAINER
                 else:
-                    self.state = DispensingStates.DISPENSE
+                    if type(self.request[0]) == DispensingDelay:
+                        self.state = DispensingStates.WAIT
+                    else:
+                        self.state = DispensingStates.DISPENSE
+        
+        elif self.state == DispensingStates.WAIT:
+            self.request.popleft()
+            self.state = DispensingStates.HOME
 
         elif self.state == DispensingStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
@@ -179,6 +166,11 @@ class DispensingStateMachine(RatatouillePlanner):
                 # generate dispensing requests for each ingredient
                 try:
                     for _ingredient in _selected_recipe["ingredients"]:
+                        # if delay step, add delay action to recipe
+                        if _ingredient["name"] == "_wait":
+                            self.request.append(DispensingDelay(_ingredient["quantity"]))
+                            continue
+
                         # check if ingredient is in inventory
                         _temp_id = self.get_position_of_ingredient(_ingredient["name"])
                         if _temp_id is None:

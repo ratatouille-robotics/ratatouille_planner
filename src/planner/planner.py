@@ -47,8 +47,7 @@ class IngredientTypes(str, Enum):
 class DispensingStates(Enum):
     HOME = auto()
     AWAIT_USER_INPUT = auto()
-    # SEARCH_MARKER = auto()
-    # VERIFY_INGREDIENT = auto()
+    WAIT = auto()
     PICK_CONTAINER = auto()
     DISPENSE = auto()
     REPLACE_CONTAINER = auto()
@@ -295,3 +294,34 @@ class RatatouillePlanner(ABC):
         pose.orientation.z = _temp_quaternion[2]
         pose.orientation.w = _temp_quaternion[3]
         return pose
+
+class RecipeAction(ABC):
+    guid: uuid.UUID = None
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.guid = uuid.uuid4()
+
+class DispensingDelay(RecipeAction):
+    duration: int = 0
+
+    def __init__(self, _duration: int) -> None:
+        super().__init__()
+        self.duration = _duration
+
+class DispensingRequest(RecipeAction):
+    ingredient_id: int = None
+    ingredient_name: str = None
+    quantity: float = None
+
+    def __init__(
+        self,
+        ingredient_id: int,
+        ingredient_name: str,
+        quantity: float,
+        ingredient_pose: List[float],
+    ) -> None:
+        self.ingredient_id = ingredient_id
+        self.ingredient_name = ingredient_name
+        self.quantity = quantity
+        self.ingredient_pose = ingredient_pose
