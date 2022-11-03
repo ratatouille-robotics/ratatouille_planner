@@ -50,13 +50,13 @@ stateDiagram-v2
     state container_detected <<choice>>
     state ingredient_missing <<choice>>
 
-    
+
     HOME --> has_container: Has container?
     has_container --> has_request1: False \n Is calibration complete?
     has_container --> REPLACE_CONTAINER: True
 
     has_request1 --> STOP: True
-    
+
     has_request1 --> VISIT_NEXT_CONTAINER: False
 
     VISIT_NEXT_CONTAINER --> container_detected: Container detected?
@@ -74,7 +74,7 @@ stateDiagram-v2
 
     LOG_ERROR --> HOME: Reset error
 
-    
+
     VISIT_NEXT_CONTAINER --> LOG_ERROR: has_error = True
     LABEL_INGREDIENT --> LOG_ERROR: has_error = True
     PICK_CONTAINER --> LOG_ERROR: has_error = True
@@ -127,9 +127,17 @@ flowchart
 
 ## Usage
 
+### Inventory update
+Pre-requisite services:
+``` sh
+roslaunch ur_motion ur5e_bringup.launch robot_ip:=10.0.0.2
+
+roslaunch ratatouille_planner ratatouille-bringup.launch
 ```
-roslaunch ratatouille_planner dispense_autonomous.py [-h] [--debug] [--config-dir CONFIG_DIR] [--disable-gripper]
-                            [--disable-external-input] [--verbose] [--stop-and-proceed]
+Usage:
+``` sh
+rosrun ratatouille_planner calibrate_autonomous.py [-h] [--debug] [--config-dir CONFIG_DIR] [--disable-gripper] [--disable-external-input] [--bypass-picking]
+                               [--bypass-id-service] [--bypass-sensing] [--verbose] [--stop-and-proceed]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -139,6 +147,40 @@ optional arguments:
   --disable-gripper     Disable gripper commands
   --disable-external-input
                         Disable user input board
+  --bypass-picking      Bypass container picking
+  --bypass-id-service   Bypass ingredient identification
+  --bypass-sensing      Bypass sensing
+  --verbose             Enable verbose output
+  --stop-and-proceed    Announce and wait for key-press before performing each action
+```
+
+### Dispensing
+Pre-requisite services:
+``` sh
+roslaunch ur_motion ur5e_bringup.launch robot_ip:=10.0.0.2
+
+roslaunch ratatouille_planner ratatouille-bringup.launch calibrate:=false
+```
+Usage:
+``` sh
+
+rosrun ratatouille_planner dispense_autonomous.py [-h] [--debug] [--config-dir CONFIG_DIR] [--dispense-log-file DISPENSE_LOG_FILE]
+                              [--ingredient-quantity-log INGREDIENT_QUANTITY_LOG] [--disable-gripper] [--disable-external-input] [--bypass-dispensing]
+                              [--verbose] [--stop-and-proceed]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --debug               Enable debug mode (run without robot)
+  --config-dir CONFIG_DIR
+                        Directory path for configuration files
+  --dispense-log-file DISPENSE_LOG_FILE
+                        Dispensing log file path
+  --ingredient-quantity-log INGREDIENT_QUANTITY_LOG
+                        Ingredient quantity log file path
+  --disable-gripper     Disable gripper commands
+  --disable-external-input
+                        Disable user input board
+  --bypass-dispensing   Bypass dispensing
   --verbose             Enable verbose output
   --stop-and-proceed    Announce and wait for key-press before performing each action
 
