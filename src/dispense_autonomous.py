@@ -113,6 +113,7 @@ class DispensingStateMachine(RatatouillePlanner):
         elif self.state == DispensingStates.WAIT:
             time.sleep(self.request[0].duration)
             self.request.popleft()
+            self.status_request = self.request[0].guid
             self.state = DispensingStates.HOME
 
         elif self.state == DispensingStates.AWAIT_USER_INPUT:
@@ -246,7 +247,7 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.robot_mg.get_current_pose(),
                     [0, 0, _CONTAINER_LIFT_OFFSET],
                 ),
-                acc_scaling=0.3,
+                acc_scaling=0.1,
                 velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
@@ -346,50 +347,54 @@ class DispensingStateMachine(RatatouillePlanner):
 
         elif self.state == DispensingStates.REPLACE_CONTAINER:
             # Move up a little to prevent container hitting the shelf
-            # self.log(
-            #     "Moving a little above expected view (to avoid hitting shelf while replacing container)"
-            # )
-
-            # _temp = self.inventory.positions[self.status_container].pose
-            # # if recovering from error, use previous container id
-            # if not self._go_to_pose_cartesian_order(
-            #     offset_pose(
-            #         make_pose(_temp[:3], _temp[3:]),
-            #         [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
-            #     ),
-            #     acceleration_scaling_factor=0.1,
-            # ):
-            #     self.error_message = "Error moving to pose goal"
-            #     self.state = DispensingStates.LOG_ERROR
-            #     return
-
-            # # Move to ingredient position
-            # self.log("Moving to replace container at ingredient position")
-
-            # # revert correction for gripper angle tilt
-            # _temp_pose = self._correct_gripper_angle_tilt(
-            #     self.robot_mg.get_current_pose(), reverse=False
-            # )
-
-            # if not self._robot_go_to_pose_goal(
-            #     offset_pose(
-            #         _temp_pose,
-            #         [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
-            #     )
-            # ):
-            #     self.error_message = "Error moving to pose goal"
-            #     self.state = DispensingStates.LOG_ERROR
-            #     return
+            self.log(
+                "Moving a little above expected view to avoid hitting shelf while replacing container)"
+            )
 
             _temp = self.inventory.positions[self.status_container].pose
+            # if recovering from error, use previous container id
             if not self._go_to_pose_cartesian_order(
-                make_pose(_temp[:3], _temp[3:]),
+                offset_pose(
+                    make_pose(_temp[:3], _temp[3:]),
+                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, _CONTAINER_LIFT_OFFSET],
+                ),
                 acceleration_scaling_factor=0.3,
                 velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
                 self.state = DispensingStates.LOG_ERROR
                 return
+
+            # Move to ingredient position
+            self.log("Moving to replace container at ingredient position")
+
+            # revert correction for gripper angle tilt
+            # _temp_pose = self._correct_gripper_angle_tilt(
+            #     self.robot_mg.get_current_pose(), reverse=False
+            # )
+            _temp_pose = self.robot_mg.get_current_pose()
+
+            if not self._robot_go_to_pose_goal(
+                offset_pose(
+                    _temp_pose,
+                    [0, -_CONTAINER_SHELF_BACKOUT_OFFSET, -_CONTAINER_LIFT_OFFSET],
+                ),
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
+            ):
+                self.error_message = "Error moving to pose goal"
+                self.state = DispensingStates.LOG_ERROR
+                return
+
+            # _temp = self.inventory.positions[self.status_container].pose
+            # if not self._go_to_pose_cartesian_order(
+            #     make_pose(_temp[:3], _temp[3:]),
+            #     acceleration_scaling_factor=0.3,
+            #     velocity_scaling=0.9,
+            # ):
+            #     self.error_message = "Error moving to pose goal"
+            #     self.state = DispensingStates.LOG_ERROR
+            #     return
 
             # Release gripper
             self.log("Opening gripper")
