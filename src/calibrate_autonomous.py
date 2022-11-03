@@ -11,6 +11,7 @@ from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64, String
 import time
 
+from sensor_interface.msg import Weight
 from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
 from motion.utils import make_pose, offset_pose, offset_pose_relative
@@ -80,6 +81,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         # initialize dependencies
 
         self.pose_transformer = PoseTransforms()
+        self.weight_subscriber = rospy.Subscriber(
+            "/sensing_station/weighing_scale", Weight, callback=self.__weight_callback
+        )
 
         # initialize state variables
         self.state = state
@@ -89,6 +93,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.ingredient_name = None
         self.ingredient_quantity = None
         self.error_message = None
+        self.weighing_scale_weight = None
 
         # temporary variables
         self.ingredient_actual_position = None
@@ -100,6 +105,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             if self.inventory.positions[key] is None:
                 return key
         return -1
+
+    def __weight_callback(self, data: float) -> None:
+        self.weighing_scale_weight = data
 
     def run(self) -> None:
         self.print_current_state_banner()
@@ -393,7 +401,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 return
 
             self._robot_open_gripper(wait=True)
-            
+
             if self.bypass_id_service:
                 self.ingredient_quantity = 100
             else:
@@ -420,7 +428,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     self.error_state = self.state
                     self.state = InventoryUpdateStates.LOG_ERROR
 
-                self.ingredient_quantity = 100.0 # float
+                self.ingredient_quantity = self.weighing_scale_weight
 
             self._robot_close_gripper(wait=True)
 
@@ -434,13 +442,6 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
                 return
-
-            # self.log("Wait for weight estimate from force-torque sensor")
-            # time.sleep(2)
-            # self.ingredient_quantity: Float64 = rospy.wait_for_message(
-            #     "force_torque_weight", Float64, timeout=None
-            # )
-            # self.ingredient_quantity = self.ingredient_quantity.data * 1000
 
             self.log(f"Estimated weight: {self.ingredient_quantity}")
 
