@@ -1,13 +1,13 @@
-name: lentils
-tolerance: 5.0
+name: marinara
+tolerance: 20.0
 container: 
   lid: none
 pouring_position: corner
 controller:
   type: pd
-  error_threshold: 3.0
-  p_gain: 0.0025
-  d_gain: 0.02
+  error_threshold: 20.0
+  p_gain: 0.02
+  d_gain: 0.005
   acc_scaling: 1
   vel_scaling: 1
   rot_axis: [0.7071, 0, -0.7071]

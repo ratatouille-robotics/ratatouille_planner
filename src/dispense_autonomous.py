@@ -288,17 +288,18 @@ class DispensingStateMachine(RatatouillePlanner):
             dispensing_params = self.pouring_characteristics[
                 self.request[0].ingredient_name
             ]
-            _temp = self.known_poses["cartesian"]["pouring"][
-                dispensing_params["container"]
-            ][dispensing_params["pouring_position"]]
-            if not self._robot_go_to_pose_goal(
-                make_pose(_temp[:3], _temp[3:]),
-                orient_tolerance=0.05,
-                velocity_scaling=0.15,
-            ):
-                self.error_message = "Error moving to pose goal"
-                self.state = DispensingStates.LOG_ERROR
-                return
+            # lid_type = self.known_poses["cartesian"]["pouring"][dispensing_params["container"]["lid"]]
+            # if lid_type in ["none", "slot"]:
+            #     lid_type = "regular"
+            # _temp = self.known_poses["cartesian"]["pouring"][lid_type][dispensing_params["pouring_position"]]
+            # if not self._robot_go_to_pose_goal(
+            #     make_pose(_temp[:3], _temp[3:]),
+            #     orient_tolerance=0.05,
+            #     velocity_scaling=0.15,
+            # ):
+            #     self.error_message = "Error moving to pose goal"
+            #     self.state = DispensingStates.LOG_ERROR
+            #     return
 
             # Dispense ingredient
             self.log(
@@ -313,7 +314,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
             dispense_error = actual_dispensed_quantity - self.request[0].quantity
             self.log(
-                f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request.quantity}] grams)"
+                f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request[0].quantity}] grams)"
             )
 
             # update ingredient quantity in inventory

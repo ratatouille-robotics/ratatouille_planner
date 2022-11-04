@@ -1,0 +1,23 @@
+name: poha_thick
+tolerance: 25.0
+container:
+  lid: slot
+  slot:
+    size: 40
+pouring_position: edge
+controller:
+  type: pd
+  error_threshold: 20
+  # error_threshold: 10.0
+  p_gain: 0.0025
+  d_gain: 0.02
+  acc_scaling: 2
+  vel_scaling: 1
+  rot_axis: [1, 0, 0]
+  shaking: True
+  trans_shake_params:
+    axis: [0, 1, 0]
+    amplitude: 0.01
+    # amplitude: 0.0075
+    frequency: 4
+    pattern: [0, 1, 0, 0, 0, 0]

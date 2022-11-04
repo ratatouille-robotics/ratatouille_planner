@@ -1,0 +1,22 @@
+name: turmeric
+tolerance: 0.3
+container:
+  lid: holes
+  holes:
+    count: 3
+    diameter: 2
+pouring_position: corner
+controller:
+  type: logical
+  error_threshold: 0.25
+  p_gain: 0.0025
+  d_gain: 0.02
+  acc_scaling: 1
+  vel_scaling: 1
+  rot_axis: [0.7071, 0, -0.7071]
+  shaking: True
+  trans_shake_params:
+    axis: [1, 0, 0]
+    amplitude: 0.007
+    frequency: 4.5
+    pattern: [1, 0, 0, 0]

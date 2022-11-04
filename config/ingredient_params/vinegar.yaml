@@ -1,6 +1,10 @@
 name: vinegar
 tolerance: 5.0
-container: liquid
+container:
+  lid: spout
+  spout:
+    diameter: 4
+    length: 50
 pouring_position: corner
 controller:
   type: pd

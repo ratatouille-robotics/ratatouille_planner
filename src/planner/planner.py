@@ -20,7 +20,7 @@ _CALIBRATION_END_CONTAINER = 15
 
 class IngredientTypes(str, Enum):
     OLIVES_BLACK = "blackolives"
-    BLACK_PEPPER = "blackpepper"
+    BLACK_PEPPER = "black_pepper"
     CABBAGE = "cabbage"
     CARROT = "carrot"
     CHERRY_TOMATOES = "cherrytomatoes"
@@ -38,8 +38,16 @@ class IngredientTypes(str, Enum):
     VINEGAR = "vinegar"
     WATER = "water"
     ONION_WHITE = "whiteonion"
+    ONION = "onion"
     NO_INGREDIENT = "no_ingredient"
     NO_CONTAINER = "no_container"
+    SUNFLOWER_OIL = "sunflower_oil"
+    GARLIC_POWDER = "garlic_powder"
+    MARINARA = "marinara"
+    PASTA = "pasta"
+    CHEESE = "cheese"
+    BELL_PEPPER = "bell_pepper"
+
 
     def __str__(self) -> str:
         return str.__str__(self)

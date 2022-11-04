@@ -14,4 +14,59 @@
     quantity: 2
   - name: water
     quantity: 5
-  
+- id: 3
+  name: sunflower_oil
+  ingredients:
+  - name: sunflower_oil
+    quantity: 15  
+- id: 4
+  name: onion
+  ingredients:
+  - name: onion
+    quantity: 100  
+- id: 5
+  name: garlic_powder
+  ingredients:
+  - name: garlic_powder
+    quantity: 5  
+- id: 6
+  name: marinara
+  ingredients:
+  - name: marinara
+    quantity: 400  
+- id: 7
+  name: salt
+  ingredients:
+  - name: salt
+    quantity: 5  
+- id: 8
+  name: black_pepper
+  ingredients:
+  - name: black_pepper
+    quantity: 1  
+- id: 9
+  name: oregano
+  ingredients:
+  - name: oregano
+    quantity: 3  
+- id: 10
+  name: water
+  ingredients:
+  - name: water
+    quantity: 500  
+- id: 11
+  name: pasta
+  ingredients:
+  - name: pasta
+    quantity: 225  
+- id: 12
+  name: cheese
+  ingredients:
+  - name: cheese
+    quantity: 50  
+- id: 13
+  name: bell_pepper
+  ingredients:
+  - name: bell_pepper
+    quantity: 100  
+

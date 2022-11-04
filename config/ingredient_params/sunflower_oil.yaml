@@ -1,0 +1,17 @@
+name: sunflower_oil
+tolerance: 10.0
+container:
+  lid: spout
+  spout:
+    diameter: 4
+    length: 50
+pouring_position: corner
+controller:
+  type: pd
+  error_threshold: 3.0
+  p_gain: 0.012
+  d_gain: 0.06
+  acc_scaling: 1.5
+  vel_scaling: 3
+  rot_axis: [0.7071, 0, -0.7071]
+  shaking: False

@@ -1,5 +1,5 @@
-name: cucumber
-tolerance: 25.0
+name: cheese
+tolerance: 10.0
 container:
   lid: slot
   slot:
@@ -7,7 +7,8 @@ container:
 pouring_position: edge
 controller:
   type: pd
-  error_threshold: 20.0
+  error_threshold: 8
+  # error_threshold: 10.0
   p_gain: 0.0025
   d_gain: 0.02
   acc_scaling: 2
@@ -17,5 +18,6 @@ controller:
   trans_shake_params:
     axis: [0, 1, 0]
     amplitude: 0.01
+    # amplitude: 0.0075
     frequency: 4
     pattern: [0, 1, 0, 0, 0, 0]

@@ -1,5 +1,5 @@
-name: salt
-tolerance: 0.3
+name: garlic_powder
+tolerance: 1
 container:
   lid: holes
   holes:
@@ -17,6 +17,8 @@ controller:
   shaking: True
   trans_shake_params:
     axis: [1, 0, 0]
-    amplitude: 0.005
-    frequency: 5
+    amplitude: 0.007
+    frequency: 4.5
     pattern: [0, 1, 0, 0]
+
+#old sugar lid with 3 holes bigger than salt
