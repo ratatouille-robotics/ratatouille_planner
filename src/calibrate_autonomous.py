@@ -401,9 +401,11 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 return
 
             self._robot_open_gripper(wait=True)
-
+            #wait for weighing scale readings to settle
+            time.sleep(3)
             if self.bypass_id_service:
-                self.ingredient_quantity = 100
+                # self.ingredient_quantity = 100
+                self.ingredient_quantity = self.weighing_scale_weight.weight
             else:
                 rospy.wait_for_service("ingredient_validation")
                 try:
@@ -427,8 +429,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     )
                     self.error_state = self.state
                     self.state = InventoryUpdateStates.LOG_ERROR
-
-                self.ingredient_quantity = self.weighing_scale_weight
+                self.ingredient_quantity = self.weighing_scale_weight.weight
 
             self._robot_close_gripper(wait=True)
 
