@@ -31,20 +31,20 @@
       <arg name="rviz_config" value="$(arg rviz_config)" />
     </include>
 
+    <group if="$(arg calibrate)">
+      <!-- RealSense Camera -->
+      <include file="$(find realsense2_camera)/launch/rs_rgbd.launch">
+        <arg name="device_type" value="$(arg realsense_camera_type)" />
+        <arg name="enable_depth" value="true" />
+      </include>
 
-    <!-- RealSense Camera -->
-    <include file="$(find realsense2_camera)/launch/rs_rgbd.launch" if="$(eval arg('calibrate') == 'true')">
-      <arg name="device_type" value="$(arg realsense_camera_type)" />
-      <arg name="enable_depth" value="true" />
-    </include>
+      <!-- April Tag Tracking -->
+      <include file="$(find ar_track_alvar)/launch/realsense_rgb_track.launch" />
 
-    <!-- April Tag Tracking -->
-    <include file="$(find ar_track_alvar)/launch/realsense_rgb_track.launch" if="$(eval arg('calibrate') == 'true')" />
+      <!-- Pose estimation -->
+      <node pkg="ratatouille_pose_estimation" type="publish_marker_poses.py" name="ratatouille_pose_estimation" />
 
-    <!-- Pose estimation -->
-    <node pkg="ratatouille_pose_estimation" type="publish_marker_poses.py" name="ratatouille_pose_estimation" if="$(eval arg('calibrate') == 'true')" />
-
-    <!-- Ingredient identification -->
-    <node pkg="ingredient_validation" type="validate_ingredient_service.py" name="ingredient_validation" if="$(eval arg('calibrate') == 'true')" />
-
+      <!-- Ingredient identification -->
+      <node pkg="ingredient_validation" type="validate_ingredient_service.py" name="ingredient_validation" />
+    </group>
 </launch>
