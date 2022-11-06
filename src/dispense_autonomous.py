@@ -78,7 +78,7 @@ class DispensingStateMachine(RatatouillePlanner):
         self.disable_external_input = disable_external_input
         self.debug_bypass_dispensing = bypass_dispensing
 
-        self.load_pouring_characteristics()
+        # self.load_pouring_characteristics()
         self.killer = GracefulKiller()
         # initialize state variables
         self.state = state
@@ -298,9 +298,9 @@ class DispensingStateMachine(RatatouillePlanner):
             self.log(
                 f"Moving to dispensing position for ingredient [{self.request[0].ingredient_name}]"
             )
-            dispensing_params = self.pouring_characteristics[
-                self.request[0].ingredient_name
-            ]
+            # dispensing_params = self.pouring_characteristics[
+            #     self.request[0].ingredient_name
+            # ]
             # lid_type = self.known_poses["cartesian"]["pouring"][dispensing_params["container"]["lid"]]
             # if lid_type in ["none", "slot"]:
             #     lid_type = "regular"
@@ -322,7 +322,7 @@ class DispensingStateMachine(RatatouillePlanner):
             _IS_DISPENSING = True
             dispenser = Dispenser(self.robot_mg, self.killer)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
-                dispensing_params, float(self.request[0].quantity), log_data=True
+                self.request[0].ingredient_name, float(self.request[0].quantity), log_data=True
             )
             _IS_DISPENSING = False
             actual_dispensed_quantity = float(actual_dispensed_quantity)

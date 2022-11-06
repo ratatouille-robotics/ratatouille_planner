@@ -8,12 +8,34 @@
 - id: 2
   name: Pasta
   ingredients:
-  - name: blackpepper
-    quantity: 10
+  # - name: sunflower_oil
+  #   quantity: 15
+  - name: onion
+    quantity: 100    
   - name: _wait
-    quantity: 2
-  - name: water
+    quantity: 150
+  - name: garlic_powder
+    quantity: 3  
+  - name: marinara
+    quantity: 300
+  - name: _wait
+    quantity: 180
+  - name: bell_pepper
+    quantity: 100
+  - name: salt
     quantity: 5
+  - name: black_pepper
+    quantity: 1   
+  - name: oregano
+    quantity: 3   
+  - name: cheese
+    quantity: 100 
+  - name: water
+    quantity: 500
+  - name: _wait
+    quantity: 40
+  - name: pasta
+    quantity: 225 
 - id: 3
   name: sunflower_oil
   ingredients:
@@ -28,12 +50,12 @@
   name: garlic_powder
   ingredients:
   - name: garlic_powder
-    quantity: 5  
+    quantity: 3  
 - id: 6
   name: marinara
   ingredients:
   - name: marinara
-    quantity: 400  
+    quantity: 300  
 - id: 7
   name: salt
   ingredients:
