@@ -403,10 +403,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self._robot_open_gripper(wait=True)
             #wait for weighing scale readings to settle
             time.sleep(3)
-            if self.bypass_id_service:
-                # self.ingredient_quantity = 100
-                self.ingredient_quantity = self.weighing_scale_weight.weight
-            else:
+            #100g container weight
+            self.ingredient_quantity = self.weighing_scale_weight.weight - 100
+            # self.ingredient_quantity = 100
+            if not self.bypass_id_service:    
                 rospy.wait_for_service("ingredient_validation")
                 try:
                     service_call = rospy.ServiceProxy(
@@ -429,7 +429,6 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     )
                     self.error_state = self.state
                     self.state = InventoryUpdateStates.LOG_ERROR
-                self.ingredient_quantity = self.weighing_scale_weight.weight
 
             self._robot_close_gripper(wait=True)
 
@@ -538,7 +537,6 @@ if __name__ == "__main__":
     # start ROS node
     rospy.init_node(_ROS_NODE_NAME)
     ros_rate = rospy.Rate(_ROS_RATE)
-
     # parse command-line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(

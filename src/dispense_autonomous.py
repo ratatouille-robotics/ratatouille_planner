@@ -14,7 +14,7 @@ from std_msgs.msg import Float64, String
 from typing import List
 import time
 from datetime import datetime
-
+import signal
 from motion.utils import make_pose, offset_pose, offset_pose_relative
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
@@ -27,7 +27,20 @@ _OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 _CONTAINER_PREGRASP_OFFSET_Z = 0.175
+_IS_DISPENSING = False
 
+class GracefulKiller:
+  kill_now = False
+  def __init__(self):
+    signal.signal(signal.SIGINT, self.exit_gracefully)
+    signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+  def exit_gracefully(self, *args):
+    rospy.logerr("CTRL C detected in dispense_autonomous")
+    if not _IS_DISPENSING:
+        rospy.logerr("killed in dispense_autonomous")
+        rospy.signal_shutdown("killed in dispense_autonomous")
+    self.kill_now = True
 
 class DispensingStateMachine(RatatouillePlanner):
     # flags
@@ -36,7 +49,7 @@ class DispensingStateMachine(RatatouillePlanner):
     verbose = None
     stop_and_proceed = None
     disable_external_input = None
-
+    
     pouring_characteristics = None
 
     # state variables
@@ -66,7 +79,7 @@ class DispensingStateMachine(RatatouillePlanner):
         self.debug_bypass_dispensing = bypass_dispensing
 
         self.load_pouring_characteristics()
-
+        self.killer = GracefulKiller()
         # initialize state variables
         self.state = state
         self.status_container = -1
@@ -257,7 +270,7 @@ class DispensingStateMachine(RatatouillePlanner):
             self.state = DispensingStates.HOME
 
         elif self.state == DispensingStates.DISPENSE:
-
+            
             # Move to pre-dispense position
             self.log("Moving to pre-dispense position")
             if not self._robot_go_to_joint_state(
@@ -305,11 +318,13 @@ class DispensingStateMachine(RatatouillePlanner):
             self.log(
                 f"Dispensing [{self.request[0].quantity}] grams of [{self.request[0].ingredient_name}]"
             )
-
-            dispenser = Dispenser(self.robot_mg)
+            global _IS_DISPENSING
+            _IS_DISPENSING = True
+            dispenser = Dispenser(self.robot_mg, self.killer)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
                 dispensing_params, float(self.request[0].quantity), log_data=True
             )
+            _IS_DISPENSING = False
             actual_dispensed_quantity = float(actual_dispensed_quantity)
 
             dispense_error = actual_dispensed_quantity - self.request[0].quantity
@@ -345,6 +360,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 acc_scaling=0.3,
                 velocity_scaling=0.9,
             )
+            
 
         elif self.state == DispensingStates.REPLACE_CONTAINER:
             # Move up a little to prevent container hitting the shelf
@@ -432,7 +448,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
 if __name__ == "__main__":
     # start ROS node
-    rospy.init_node(_ROS_NODE_NAME)
+    rospy.init_node(_ROS_NODE_NAME, disable_signals=True)
     ros_rate = rospy.Rate(_ROS_RATE)
 
     # parse command-line arguments
