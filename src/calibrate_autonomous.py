@@ -249,9 +249,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.state = InventoryUpdateStates.LOG_ERROR
 
             try:
-                self.ingredient_name = IngredientTypes(
-                    response.found_ingredient.lower()
-                )
+                # self.ingredient_name = IngredientTypes(
+                #     response.found_ingredient.lower()
+                # )
+                self.ingredient_name = response.found_ingredient.lower()
                 self.log(f"Found [{self.ingredient_name}]")
                 self.state = InventoryUpdateStates.PICK_CONTAINER
 
@@ -403,8 +404,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self._robot_open_gripper(wait=True)
             #wait for weighing scale readings to settle
             time.sleep(3)
-            #100g container weight
-            self.ingredient_quantity = self.weighing_scale_weight.weight - 100
+            #98g container weight
+            self.ingredient_quantity = self.weighing_scale_weight.weight - 98
             # self.ingredient_quantity = 100
             if not self.bypass_id_service:    
                 rospy.wait_for_service("ingredient_validation")
@@ -420,7 +421,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     )
                     # TODO: assign and log correct response from spectral validation
                     # self.log(f"Spectral camera response: {response.found_ingredient.lower()}")
-                    # self.ingredient_name = response.found_ingredient.lower()
+                    self.ingredient_name = response.found_ingredient.lower()
                     self.log(f"Spectral camera response: {response}")
 
                 except rospy.ServiceException as e:
