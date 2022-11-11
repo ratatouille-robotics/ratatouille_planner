@@ -15,7 +15,8 @@
   </include> -->
 
     <!-- UR5e Moveit -->
-    <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch"></include>
+    <!-- <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch"></include> -->
+    <include file="$(find ur5e_ratatouille)/launch/move_group.launch"></include>
 
     <!-- Sensors -->
     <include file="$(find sensor_interface)/launch/start_sensors.launch" />
