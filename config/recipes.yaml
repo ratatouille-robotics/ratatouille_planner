@@ -1,15 +1,35 @@
 - id: 1
-  name: Poha
+  name: Paneer_fried_rice
   ingredients:
-  - name: greenolives
-    quantity: 40
+  - name: sunflower_oil
+    quantity: 10
+  - name: cumin_seeds
+    quantity: 5
+  - name: ginger_garlic_paste
+    quantity: 20  
+  - name: salt
+    quantity: 8
+  - name: onion
+    quantity: 150
   - name: _wait
-    quantity: 3
+    quantity: 180
+  - name: paneer
+    quantity: 220
+  - name: _wait
+    quantity: 120
+  - name: kitchen_king
+    quantity: 5
+  - name: turmeric
+    quantity: 2   
+  - name: water
+    quantity: 550   
+  - name: rice
+    quantity: 200 
 - id: 2
   name: Pasta
   ingredients:
-  # - name: sunflower_oil
-  #   quantity: 15
+  - name: sunflower_oil
+    quantity: 15
   - name: onion
     quantity: 100    
   - name: _wait
@@ -27,7 +47,7 @@
   - name: black_pepper
     quantity: 1   
   - name: oregano
-    quantity: 3   
+    quantity: 1.5   
   - name: cheese
     quantity: 100 
   - name: water
@@ -82,9 +102,9 @@
   - name: pasta
     quantity: 225  
 - id: 12
-  name: cheese
+  name: lentils
   ingredients:
-  - name: cheese
+  - name: lentils
     quantity: 50  
 - id: 13
   name: bell_pepper

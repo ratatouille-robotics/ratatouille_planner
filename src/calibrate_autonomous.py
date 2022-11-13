@@ -414,10 +414,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                         "ingredient_validation", ValidateIngredient
                     )
                     response = service_call(
-                        # mode="spectral", ingredient_name=self.ingredient_name
+                        mode="spectral", ingredient_name=self.ingredient_name
                         # TODO: remove hack for spectral camera run
-                        mode="spectral",
-                        ingredient_name="salt",
+                        # mode="spectral",
+                        # ingredient_name="salt",
                     )
                     # TODO: assign and log correct response from spectral validation
                     # self.log(f"Spectral camera response: {response.found_ingredient.lower()}")
