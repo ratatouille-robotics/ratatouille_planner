@@ -80,6 +80,8 @@
   <exec_depend>ar_track_alvar</exec_depend>
   <exec_depend>robotiq_urcap_control</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <depend>actionlib</depend>
+  <depend>actionlib_msgs</depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
