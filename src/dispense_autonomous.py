@@ -15,11 +15,27 @@ from typing import List
 import time
 from datetime import datetime
 
+import actionlib
+
+
+from ratatouille_planner.msg import (
+    RecipeRequestAction,
+    RecipeRequestFeedback,
+    RecipeRequestResult,
+)
 from motion.utils import make_pose, offset_pose, offset_pose_relative
 from dispense.dispense import Dispenser
 from sensor_interface.msg import UserInput
 from ingredient_validation.srv import ValidateIngredient
-from planner.planner import DispensingStates, IngredientTypes, RatatouillePlanner, RecipeAction, DispensingRequest, DispensingDelay
+from planner.planner import (
+    DispensingStates,
+    IngredientTypes,
+    RatatouillePlanner,
+    RecipeAction,
+    DispensingRequest,
+    DispensingDelay,
+)
+
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
@@ -27,6 +43,7 @@ _OFFSET_CONTAINER_VIEW = [0.00, 0.20, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 _CONTAINER_PREGRASP_OFFSET_Z = 0.175
+_MAX_USER_INPUT_WAIT_BEFORE_ERROR_SECONDS = 15
 
 
 class DispensingStateMachine(RatatouillePlanner):
@@ -60,6 +77,13 @@ class DispensingStateMachine(RatatouillePlanner):
 
         super().__init__(config_dir_path, debug_mode, disable_gripper, verbose)
 
+        self.action_server = actionlib.SimpleActionServer(
+            "RecipeRequest",
+            RecipeRequestAction,
+            execute_cb=self._action_server_callback,
+            auto_start=False,
+        )
+
         # initialize flags
         self.stop_and_proceed = stop_and_proceed
         self.disable_external_input = disable_external_input
@@ -73,6 +97,47 @@ class DispensingStateMachine(RatatouillePlanner):
         self.status_request = -1
         self.request = deque()
         self.error_message = None
+
+    def _action_server_callback(self, goal):
+        # read from goal and add to self.request
+        _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
+        self._add_request_from_recipe(_selected_recipe)
+
+    def _get_recipe_by_id(self, recipe_id: int) -> dict:
+        for recipe in self.recipes:
+            if recipe["id"] == recipe_id:
+                return recipe
+        return None
+
+    def _add_request_from_recipe(self, recipe: dict) -> List[DispensingRequest]:
+
+        try:
+            for _ingredient in recipe:
+                # if delay step, add delay action to recipe
+                if _ingredient["name"] == "_wait":
+                    self.request.append(DispensingDelay(_ingredient["quantity"]))
+                    continue
+
+                # check if ingredient is in inventory
+                _temp_id = self.get_position_of_ingredient(_ingredient["name"])
+                if _temp_id is None:
+                    raise
+                # check if sufficient quantity is in inventory
+                if (
+                    self.inventory.positions[_temp_id].quantity
+                    < _ingredient["quantity"]
+                ):
+                    raise
+                request = DispensingRequest(
+                    ingredient_id=_temp_id,
+                    ingredient_name=self.inventory.positions[_temp_id].name,
+                    quantity=_ingredient["quantity"],
+                    ingredient_pose=self.inventory.positions[_temp_id].pose,
+                )
+                self.request.append(request)
+        except:
+            self.error_message = "Unable to parse user input."
+            return None
 
     def run(self) -> None:
         self.print_current_state_banner()
@@ -109,7 +174,7 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.state = DispensingStates.REPLACE_CONTAINER
                 else:
                     self.state = DispensingStates.DISPENSE
-        
+
         elif self.state == DispensingStates.WAIT:
             time.sleep(self.request[0].duration)
             self.request.popleft()
@@ -118,32 +183,20 @@ class DispensingStateMachine(RatatouillePlanner):
 
         elif self.state == DispensingStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
-                # TODO: send prompt to display menu to external interface
 
-                # TODO: receive user input from external interface
-                # self.log("Waiting for user input from the input board")
-                # user_request: UserInput = rospy.wait_for_message(
-                #     "user_input", UserInput, timeout=None
-                # )
+                wait_for_user_input_time = time.time()
 
-                # validate input
-                # try:
-                #     # check if ingredient in list
-                #     ingredient = list(
-                #         filter(
-                #             lambda x: x["name"] == user_request.ingredient.lower(),
-                #             self.known_poses["cartesian"]["ingredients"],
-                #         )
-                #     )[0]
-                #     self.request = DispensingRequest(
-                #         ingredient_id=ingredient["id"],
-                #         ingredient_name=ingredient["name"].lower(),
-                #         container_pose=ingredient["view_pose"],
-                #         quantity=float(user_request.quantity),
-                #     )
-                # except:
-                #     self.error_message = "Invalid user input."
-                raise NotImplementedError
+                # self.request is updated directly in self.action_server_callback
+                while len(self.request) == 0:
+                    time.sleep(1)
+                    if (
+                        time.time() - wait_for_user_input_time
+                        > _MAX_USER_INPUT_WAIT_BEFORE_ERROR_SECONDS
+                    ):
+                        self.error_message = "No user input received"
+                        self.state = DispensingStates.LOG_ERROR
+                        return
+
             else:
                 # print menu and read input from command line
 
@@ -153,49 +206,24 @@ class DispensingStateMachine(RatatouillePlanner):
                 print("-" * 80)
                 _selected_recipe_id = int(input("Enter recipe ID: "))
 
-                # parse user input
+                # generate dispensing requests for each ingredient
                 try:
-                    _selected_recipe = list(
-                        filter(
-                            lambda x: x["id"] == _selected_recipe_id,
-                            self.recipes,
-                        )
-                    )[0]
+                    # parse user input
+                    _selected_recipe = self._get_recipe_by_id(_selected_recipe_id)
+                    assert _selected_recipe is not None
+                    self._add_request_from_recipe(_selected_recipe)
+                    assert len(self.request) > 0
                 except:
                     self.error_message = "Unable to parse user input."
 
-                # generate dispensing requests for each ingredient
                 try:
-                    for _ingredient in _selected_recipe["ingredients"]:
-                        # if delay step, add delay action to recipe
-                        if _ingredient["name"] == "_wait":
-                            self.request.append(DispensingDelay(_ingredient["quantity"]))
-                            continue
-
-                        # check if ingredient is in inventory
-                        _temp_id = self.get_position_of_ingredient(_ingredient["name"])
-                        if _temp_id is None:
-                            raise
-                        # check if sufficient quantity is in inventory
-                        if (
-                            self.inventory.positions[_temp_id].quantity
-                            < _ingredient["quantity"]
-                        ):
-                            raise
-                        request = DispensingRequest(
-                            ingredient_id=_temp_id,
-                            ingredient_name=self.inventory.positions[_temp_id].name,
-                            quantity=_ingredient["quantity"],
-                            ingredient_pose=self.inventory.positions[_temp_id].pose,
-                        )
-                        self.request.append(request)
-                    assert len(self.request) > 0
                     self.status_request = self.request[
                         0
                     ].guid  # index of first ingredient to be dispenses
                 except:
                     self.error_message = "Missing ingredient/ insufficient quantity - cannot prepare recipe."
 
+            if self.error_message is None:
                 # print selected recipe
                 self.log(f"Selected recipe: {_selected_recipe['name']}".center(80))
                 self.log(f"{'-' * 40}".center(80))
@@ -208,7 +236,6 @@ class DispensingStateMachine(RatatouillePlanner):
                     )
                 self.log(f"{'-' * 40}".center(80))
 
-            if self.error_message is None:
                 self.log(
                     f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
                 )
