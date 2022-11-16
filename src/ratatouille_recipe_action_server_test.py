@@ -29,7 +29,7 @@ class RatatouilleAction(object):
         success = True
 
         # publish info to the console for the user
-        rospy.loginfo("%s: Executing" % (self._action_name))
+        rospy.loginfo("%s: Executing. Received recipe [%d]" % (self._action_name, goal.recipe_id))
 
         # start executing the action
         for i in range(1, 10):
