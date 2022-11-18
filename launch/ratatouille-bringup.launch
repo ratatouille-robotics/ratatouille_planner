@@ -2,7 +2,7 @@
 <launch>
 
   <!--Robot description and parameter files -->
-  <arg name="calibrate" default="true" doc="if inventory file is generated">
+    <arg name="calibrate" default="true" doc="if inventory file is generated"/>
     <arg name="robot_ip" default="10.0.0.2" doc="UR5's IP" />
     <arg name="kinematics_config" default="/home/ratatouille/my_robot_calibration.yaml" />
     <arg name="rviz_config" default="$(find ur5e_moveit_config)/launch/moveit_ratatouille_autonomous_dispensing.rviz" />
@@ -15,7 +15,8 @@
   </include> -->
 
     <!-- UR5e Moveit -->
-    <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch"></include>
+    <!-- <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch"></include> -->
+    <include file="$(find ur5e_ratatouille)/launch/move_group.launch"></include>
 
     <!-- Sensors -->
     <include file="$(find sensor_interface)/launch/start_sensors.launch" />
@@ -31,20 +32,26 @@
       <arg name="rviz_config" value="$(arg rviz_config)" />
     </include>
 
+    <group if="$(arg calibrate)">
+      <!-- RealSense Camera -->
+      <include file="$(find realsense2_camera)/launch/rs_rgbd.launch">
+        <arg name="device_type" value="$(arg realsense_camera_type)" />
+        <arg name="enable_depth" value="true" />
+        <!-- <arg name="color_width" value="1280" />
+        <arg name="color_height" value="720" />
+        <arg name="color_fps" value="30" />
+        <arg name="depth_width" value="1280" />
+        <arg name="depth_height" value="720" />
+        <arg name="depth_fps" value="30" /> -->
+      </include>
 
-    <!-- RealSense Camera -->
-    <include file="$(find realsense2_camera)/launch/rs_rgbd.launch" if="$(eval arg('calibrate') == 'true')">
-      <arg name="device_type" value="$(arg realsense_camera_type)" />
-      <arg name="enable_depth" value="true" />
-    </include>
+      <!-- April Tag Tracking -->
+      <include file="$(find ar_track_alvar)/launch/realsense_rgb_track.launch" />
 
-    <!-- April Tag Tracking -->
-    <include file="$(find ar_track_alvar)/launch/realsense_rgb_track.launch" if="$(eval arg('calibrate') == 'true')" />
+      <!-- Pose estimation -->
+      <node pkg="ratatouille_pose_estimation" type="publish_marker_poses.py" name="ratatouille_pose_estimation" />
 
-    <!-- Pose estimation -->
-    <node pkg="ratatouille_pose_estimation" type="publish_marker_poses.py" name="ratatouille_pose_estimation" if="$(eval arg('calibrate') == 'true')" />
-
-    <!-- Ingredient identification -->
-    <node pkg="ingredient_validation" type="validate_ingredient_service.py" name="ingredient_validation" if="$(eval arg('calibrate') == 'true')" />
-
+      <!-- Ingredient identification -->
+      <node pkg="ingredient_validation" type="validate_ingredient_service.py" name="ingredient_validation" />
+    </group>
 </launch>
