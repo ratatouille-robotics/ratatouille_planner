@@ -8,8 +8,8 @@
     <arg name="rviz_config" default="$(find ur5e_moveit_config)/launch/moveit_ratatouille_autonomous_dispensing.rviz" />
     <arg name="realsense_camera_type" default="d435" />
 
-    <!-- Robot bringup -->
-    <!-- <include file="$(find ur_robot_driver)/launch/ur5e_bringup.launch">
+  <!-- Robot bringup -->
+  <!-- <include file="$(find ur_robot_driver)/launch/ur5e_bringup.launch">
     <arg name="kinematics_config" value="$(arg kinematics_config)"/>
     <arg name="robot_ip" value="$(arg robot_ip)"/>
   </include> -->
@@ -18,19 +18,19 @@
     <!-- <include file="$(find ur5e_moveit_config)/launch/ur5e_moveit_planning_execution.launch"></include> -->
     <include file="$(find ur5e_ratatouille)/launch/move_group.launch"></include>
 
-    <!-- Sensors -->
-    <include file="$(find sensor_interface)/launch/start_sensors.launch" />
+  <!-- Sensors -->
+  <include file="$(find sensor_interface)/launch/start_sensors.launch" />
 
-    <!-- Robot Gripper controller -->
-    <node pkg="robotiq_urcap_control" type="robotic_urcap_ctrl_py3_wrapper.py" name="robotiq_urcap_control">
-      <!--<param name="publish_frequency" type="double" value="$(arg tf_pub_rate)" />
+  <!-- Robot Gripper controller -->
+  <node pkg="robotiq_urcap_control" type="robotic_urcap_ctrl_py3_wrapper.py" name="robotiq_urcap_control">
+    <!--<param name="publish_frequency" type="double" value="$(arg tf_pub_rate)" />
     <param name="tf_prefix" value="$(arg tf_prefix)" />  -->
-    </node>
+  </node>
 
-    <!-- Rviz launch -->
-    <include file="$(find ur5e_moveit_config)/launch/moveit_rviz.launch">
-      <arg name="rviz_config" value="$(arg rviz_config)" />
-    </include>
+  <!-- Rviz launch -->
+  <include file="$(find ur5e_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="rviz_config" value="$(arg rviz_config)" />
+  </include>
 
     <group if="$(arg calibrate)">
       <!-- RealSense Camera -->

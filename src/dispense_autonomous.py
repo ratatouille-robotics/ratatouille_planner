@@ -7,6 +7,7 @@ import rospkg
 import argparse
 import yaml
 import os
+import sys
 from tf.transformations import *
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from geometry_msgs.msg import Pose
@@ -91,12 +92,14 @@ class DispensingStateMachine(RatatouillePlanner):
 
         super().__init__(config_dir_path, debug_mode, disable_gripper, verbose)
 
+        # Register and start action server to recieve recipe requests
         self.action_server = actionlib.SimpleActionServer(
             "RecipeRequest",
             RecipeRequestAction,
-            execute_cb=self._action_server_callback,
+            execute_cb=self._action_server_queue_request,
             auto_start=False,
         )
+        self.action_server.start()
 
         # initialize flags
         self.stop_and_proceed = stop_and_proceed
@@ -112,10 +115,16 @@ class DispensingStateMachine(RatatouillePlanner):
         self.request = deque()
         self.error_message = None
 
-    def _action_server_callback(self, goal):
+    def _action_server_queue_request(self, goal):
         # read from goal and add to self.request
-        _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
-        self._add_request_from_recipe(_selected_recipe)
+        print(f"Received request for recipe ID: [{goal}]")
+        try:
+            _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
+            assert _selected_recipe is not None
+            self._add_request_from_recipe(_selected_recipe)
+        except Exception:
+            print("Error: Missing ingredients/insufficient quantity in inventory.")
+            self.action_server.set_aborted()
 
     def _get_recipe_by_id(self, recipe_id: int) -> dict:
         for recipe in self.recipes:
@@ -124,34 +133,31 @@ class DispensingStateMachine(RatatouillePlanner):
         return None
 
     def _add_request_from_recipe(self, recipe: dict) -> List[DispensingRequest]:
+        assert recipe is not None and recipe["ingredients"] is not None
 
-        try:
-            for _ingredient in recipe:
-                # if delay step, add delay action to recipe
-                if _ingredient["name"] == "_wait":
-                    self.request.append(DispensingDelay(_ingredient["quantity"]))
-                    continue
+        # add dispensing requests for each ingredient in recipe
+        for _ingredient in recipe["ingredients"]:
+            # if delay step, add delay action to recipe
+            if _ingredient["name"] == "_wait":
+                self.request.append(DispensingDelay(_ingredient["quantity"]))
+                continue
 
-                # check if ingredient is in inventory
-                _temp_id = self.get_position_of_ingredient(_ingredient["name"])
-                if _temp_id is None:
-                    raise
-                # check if sufficient quantity is in inventory
-                if (
-                    self.inventory.positions[_temp_id].quantity
-                    < _ingredient["quantity"]
-                ):
-                    raise
-                request = DispensingRequest(
-                    ingredient_id=_temp_id,
-                    ingredient_name=self.inventory.positions[_temp_id].name,
-                    quantity=_ingredient["quantity"],
-                    ingredient_pose=self.inventory.positions[_temp_id].pose,
-                )
-                self.request.append(request)
-        except:
-            self.error_message = "Unable to parse user input."
-            return None
+            # check if ingredient is in inventory
+            # check if sufficient quantity is in inventory
+            _temp_id = self.get_position_of_ingredient(_ingredient["name"])
+            if (
+                _temp_id is None
+                or self.inventory.positions[_temp_id].quantity < _ingredient["quantity"]
+            ):
+                raise # "Missing ingredients/insufficient quantity in inventory."
+            request = DispensingRequest(
+                ingredient_id=_temp_id,
+                ingredient_name=self.inventory.positions[_temp_id].name,
+                quantity=_ingredient["quantity"],
+                ingredient_pose=self.inventory.positions[_temp_id].pose,
+            )
+            print(request)
+            self.request.append(request)
 
     def run(self) -> None:
         self.print_current_state_banner()
@@ -197,14 +203,13 @@ class DispensingStateMachine(RatatouillePlanner):
 
         elif self.state == DispensingStates.AWAIT_USER_INPUT:
             if not self.disable_external_input:
+                # waiting for user input from web interface
 
-                wait_for_user_input_time = time.time()
-
+                wait_for_user_input_start = time.time()
                 # self.request is updated directly in self.action_server_callback
-                while len(self.request) == 0:
-                    time.sleep(1)
+                while not rospy.is_shutdown() and len(self.request) == 0:
                     if (
-                        time.time() - wait_for_user_input_time
+                        time.time() - wait_for_user_input_start
                         > _MAX_USER_INPUT_WAIT_BEFORE_ERROR_SECONDS
                     ):
                         self.error_message = "No user input received"
@@ -218,19 +223,18 @@ class DispensingStateMachine(RatatouillePlanner):
                 for recipe in self.recipes:
                     print(f"Recipe ID {recipe['id']}: {recipe['name']}".center(80))
                 print("-" * 80)
-                _selected_recipe_id = int(input("Enter recipe ID: "))
 
-                # generate dispensing requests for each ingredient
+                # read and parse user input
                 try:
-                    # parse user input
+                    _selected_recipe_id = int(input("Enter recipe ID: "))
                     _selected_recipe = self._get_recipe_by_id(_selected_recipe_id)
                     assert _selected_recipe is not None
-                    self._add_request_from_recipe(_selected_recipe)
-                    assert len(self.request) > 0
                 except:
                     self.error_message = "Unable to parse user input."
 
                 try:
+                    self._add_request_from_recipe(_selected_recipe)
+                    assert len(self.request) > 0
                     self.status_request = self.request[
                         0
                     ].guid  # index of first ingredient to be dispenses
