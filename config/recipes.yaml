@@ -33,21 +33,21 @@
   - name: onion
     quantity: 100    
   - name: _wait
-    quantity: 150
+    quantity: 120
   - name: garlic_powder
-    quantity: 3  
-  - name: marinara
-    quantity: 300
-  - name: _wait
-    quantity: 180
-  - name: bell_pepper
-    quantity: 100
+    quantity: 3
   - name: salt
     quantity: 5
   - name: black_pepper
-    quantity: 1   
+    quantity: 1  
   - name: oregano
-    quantity: 1.5   
+    quantity: 1
+  - name: marinara
+    quantity: 300
+  - name: _wait
+    quantity: 90
+  - name: bell_pepper
+    quantity: 100
   - name: cheese
     quantity: 100 
   - name: water

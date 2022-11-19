@@ -239,7 +239,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     "ingredient_validation", ValidateIngredient
                 )
                 response = service_call(mode="rgb")
-                print(f"Service Response: {response.found_ingredient.lower()}")
+                print(f"Service Response: {response.found_ingredient}")
 
             except rospy.ServiceException as e:
                 self.error_message = (
@@ -252,8 +252,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 # self.ingredient_name = IngredientTypes(
                 #     response.found_ingredient.lower()
                 # )
-                self.ingredient_name = response.found_ingredient.lower()
-                self.log(f"Found [{self.ingredient_name}]")
+                self.ingredient_name = response.found_ingredient
+                print(f"Found: {self.ingredient_name}")
                 self.state = InventoryUpdateStates.PICK_CONTAINER
 
             except ValueError:
@@ -340,8 +340,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # temp_pose = self._correct_gripper_angle_tilt(temp_pose)
 
             if not self._robot_go_to_pose_goal(pose=temp_pose,
-                acc_scaling=0.1,
-                velocity_scaling=0.9,
+                acc_scaling=0.05,
+                velocity_scaling=0.5,
                 ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
@@ -374,7 +374,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.state = InventoryUpdateStates.HOME
                 return
             # end bypass sensing
-
+            tared_weight = self.weighing_scale_weight.weight
             self.log("Moving to pre-sense position")
             if not self._robot_go_to_joint_state(
                 self.known_poses["joint"]["pre_sense"],
@@ -405,7 +405,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             #wait for weighing scale readings to settle
             time.sleep(3)
             #98g container weight
-            self.ingredient_quantity = self.weighing_scale_weight.weight - 98
+            self.ingredient_quantity = self.weighing_scale_weight.weight - 98 - tared_weight
             # self.ingredient_quantity = 100
             if not self.bypass_id_service:    
                 rospy.wait_for_service("ingredient_validation")
@@ -421,8 +421,8 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     )
                     # TODO: assign and log correct response from spectral validation
                     # self.log(f"Spectral camera response: {response.found_ingredient.lower()}")
-                    self.ingredient_name = response.found_ingredient.lower()
-                    self.log(f"Spectral camera response: {response}")
+                    self.ingredient_name = response.found_ingredient
+                    print(f"Spectral camera response: {response}")
 
                 except rospy.ServiceException as e:
                     self.error_message = (
