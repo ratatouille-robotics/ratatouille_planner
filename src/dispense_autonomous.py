@@ -108,6 +108,8 @@ class DispensingStateMachine(RatatouillePlanner):
             _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
             assert _selected_recipe is not None
             self._add_request_from_recipe(_selected_recipe)
+            self.print_recipe(_selected_recipe)
+            self.action_server.set_succeeded()
         except Exception:
             print("Error: Missing ingredients/insufficient quantity in inventory.")
             self.action_server.set_aborted()
@@ -142,8 +144,19 @@ class DispensingStateMachine(RatatouillePlanner):
                 quantity=_ingredient["quantity"],
                 ingredient_pose=self.inventory.positions[_temp_id].pose,
             )
-            print(request)
             self.request.append(request)
+
+    def print_recipe(self, recipe):
+        self.log(f"Selected recipe: {recipe['name']}".center(80))
+        self.log(f"{'-' * 40}".center(80))
+        for _ingredient in recipe["ingredients"]:
+            _temp_id = self.get_position_of_ingredient(_ingredient["name"])
+            self.log(
+                f"Ingredient ({_temp_id}) {_ingredient['name']}: {_ingredient['quantity']} grams".center(
+                    80
+                )
+            )
+        self.log(f"{'-' * 40}".center(80))
 
     def run(self) -> None:
         self.print_current_state_banner()
@@ -224,21 +237,13 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.status_request = self.request[
                         0
                     ].guid  # index of first ingredient to be dispenses
+                    self.print_recipe(_selected_recipe)
                 except:
                     self.error_message = "Missing ingredient/ insufficient quantity - cannot prepare recipe."
 
             if self.error_message is None:
                 # print selected recipe
-                self.log(f"Selected recipe: {_selected_recipe['name']}".center(80))
-                self.log(f"{'-' * 40}".center(80))
-                for _ingredient in _selected_recipe["ingredients"]:
-                    _temp_id = self.get_position_of_ingredient(_ingredient["name"])
-                    self.log(
-                        f"Ingredient ({_temp_id}) {_ingredient['name']}: {_ingredient['quantity']} grams".center(
-                            80
-                        )
-                    )
-                self.log(f"{'-' * 40}".center(80))
+
 
                 self.log(
                     f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
