@@ -1,10 +1,10 @@
 #! /usr/bin/env python3
 
 import rospy
-
 import actionlib
-
 import ratatouille_planner.msg
+
+_ROS_NODE_NAME = "RecipeRequest"
 
 
 class RatatouilleAction(object):
@@ -29,7 +29,9 @@ class RatatouilleAction(object):
         success = True
 
         # publish info to the console for the user
-        rospy.loginfo("%s: Executing. Received recipe [%d]" % (self._action_name, goal.recipe_id))
+        rospy.loginfo(
+            "%s: Executing. Received recipe [%d]" % (self._action_name, goal.recipe_id)
+        )
 
         # start executing the action
         for i in range(1, 10):
@@ -53,6 +55,7 @@ class RatatouilleAction(object):
 
 
 if __name__ == "__main__":
-    rospy.init_node("RecipeRequest")
+    # start ROS node
+    rospy.init_node(_ROS_NODE_NAME)
     server = RatatouilleAction(rospy.get_name())
     rospy.spin()
