@@ -23,12 +23,19 @@ from std_msgs.msg import Float64, String
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from tf.transformations import *
 
-from planner.planner import (DispensingDelay, DispensingRequest,
-                             DispensingStates, IngredientTypes,
-                             RatatouillePlanner, RecipeAction)
-from ratatouille_planner.msg import (RecipeRequestAction,
-                                     RecipeRequestFeedback,
-                                     RecipeRequestResult)
+from planner.planner import (
+    DispensingDelay,
+    DispensingRequest,
+    DispensingStates,
+    IngredientTypes,
+    RatatouillePlanner,
+    RecipeAction,
+)
+from ratatouille_planner.msg import (
+    RecipeRequestAction,
+    RecipeRequestFeedback,
+    RecipeRequestResult,
+)
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
@@ -37,20 +44,23 @@ _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
 _CONTAINER_PREGRASP_OFFSET_Z = 0.175
 _IS_DISPENSING = False
-_MAX_USER_INPUT_WAIT_BEFORE_ERROR_SECONDS = 15
+_MAX_USER_INPUT_WAIT_BEFORE_ERROR_SECONDS = 300
+
 
 class GracefulKiller:
-  kill_now = False
-  def __init__(self):
-    signal.signal(signal.SIGINT, self.exit_gracefully)
-    signal.signal(signal.SIGTERM, self.exit_gracefully)
+    kill_now = False
 
-  def exit_gracefully(self, *args):
-    rospy.logerr("CTRL C detected in dispense_autonomous")
-    if not _IS_DISPENSING:
-        rospy.logerr("killed in dispense_autonomous")
-        rospy.signal_shutdown("killed in dispense_autonomous")
-    self.kill_now = True
+    def __init__(self):
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self, *args):
+        rospy.logerr("CTRL C detected in dispense_autonomous")
+        if not _IS_DISPENSING:
+            rospy.logerr("killed in dispense_autonomous")
+            rospy.signal_shutdown("killed in dispense_autonomous")
+        self.kill_now = True
+
 
 class DispensingStateMachine(RatatouillePlanner):
     # flags
@@ -108,16 +118,30 @@ class DispensingStateMachine(RatatouillePlanner):
 
     def _action_server_queue_request(self, goal):
         # read from goal and add to self.request
-        print(f"Received request for recipe ID: [{goal}]")
+        self.log(f"Received request for recipe ID: [{goal}]")
         try:
             _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
             assert _selected_recipe is not None
             self._add_request_from_recipe(_selected_recipe)
             self.print_recipe(_selected_recipe)
-            self.action_server.set_succeeded()
+            percent_complete = 0
+            while (
+                not rospy.is_shutdown()
+                and not self.action_server.is_preempt_requested()
+                and percent_complete < 100
+            ):
+                percent_complete += 1
+                self.action_server.publish_feedback(
+                    RecipeRequestFeedback(percent_complete=percent_complete)
+                )
+                time.sleep(0.1)
+            self.action_server.set_succeeded(RecipeRequestResult("Done"))
         except Exception:
-            print("Error: Missing ingredients/insufficient quantity in inventory.")
-            self.action_server.set_aborted()
+            self.request.clear()
+            self.log(
+                f"Recipe Request [{goal}] from WebApp: Missing ingredients/insufficient quantity in inventory."
+            )
+            self.action_server.set_aborted(RecipeRequestResult("Error"))
 
     def _get_recipe_by_id(self, recipe_id: int) -> dict:
         for recipe in self.recipes:
@@ -142,7 +166,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 _temp_id is None
                 or self.inventory.positions[_temp_id].quantity < _ingredient["quantity"]
             ):
-                raise # "Missing ingredients/insufficient quantity in inventory."
+                raise  # "Missing ingredients/insufficient quantity in inventory."
             request = DispensingRequest(
                 ingredient_id=_temp_id,
                 ingredient_name=self.inventory.positions[_temp_id].name,
@@ -249,7 +273,6 @@ class DispensingStateMachine(RatatouillePlanner):
             if self.error_message is None:
                 # print selected recipe
 
-
                 self.log(
                     f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
                 )
@@ -350,7 +373,9 @@ class DispensingStateMachine(RatatouillePlanner):
             _IS_DISPENSING = True
             dispenser = Dispenser(self.robot_mg, self.killer)
             actual_dispensed_quantity = dispenser.dispense_ingredient(
-                self.request[0].ingredient_name, float(self.request[0].quantity), log_data=True
+                self.request[0].ingredient_name,
+                float(self.request[0].quantity),
+                log_data=True,
             )
             _IS_DISPENSING = False
             actual_dispensed_quantity = float(actual_dispensed_quantity)
@@ -388,7 +413,6 @@ class DispensingStateMachine(RatatouillePlanner):
                 acc_scaling=0.3,
                 velocity_scaling=0.9,
             )
-
 
         elif self.state == DispensingStates.REPLACE_CONTAINER:
             # Move up a little to prevent container hitting the shelf
