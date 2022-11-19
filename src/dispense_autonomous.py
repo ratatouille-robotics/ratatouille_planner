@@ -97,7 +97,7 @@ class DispensingStateMachine(RatatouillePlanner):
         self.action_server = actionlib.SimpleActionServer(
             "RecipeRequest",
             RecipeRequestAction,
-            execute_cb=self._action_server_queue_request,
+            execute_cb=self._action_server_callback,
             auto_start=False,
         )
         self.action_server.start()
@@ -116,7 +116,7 @@ class DispensingStateMachine(RatatouillePlanner):
         self.request = deque()
         self.error_message = None
 
-    def _action_server_queue_request(self, goal):
+    def _action_server_callback(self, goal):
         # read from goal and add to self.request
         self.log(f"Received request for recipe ID: [{goal}]")
         try:
@@ -124,23 +124,31 @@ class DispensingStateMachine(RatatouillePlanner):
             assert _selected_recipe is not None
             self._add_request_from_recipe(_selected_recipe)
             self.print_recipe(_selected_recipe)
-            percent_complete = 0
-            while (
-                not rospy.is_shutdown()
-                and not self.action_server.is_preempt_requested()
-                and percent_complete < 100
-            ):
-                percent_complete += 1
-                self.action_server.publish_feedback(
-                    RecipeRequestFeedback(percent_complete=percent_complete)
-                )
-                time.sleep(0.1)
-            self.action_server.set_succeeded(RecipeRequestResult("Done"))
         except Exception:
             self.request.clear()
             self.log(
                 f"Recipe Request [{goal}] from WebApp: Missing ingredients/insufficient quantity in inventory."
             )
+            self.action_server.set_aborted(RecipeRequestResult("Error"))
+            return
+        try:
+            _actions_count = len(self.request)
+            percent_complete = 0
+            while (
+                not rospy.is_shutdown()
+                and not self.action_server.is_preempt_requested()
+            ):
+                if len(self.request) == 0:
+                    self.action_server.set_succeeded(RecipeRequestResult("success"))
+                    return
+                percent_complete = 100.0 - (len(self.request) * 100.0 / _actions_count)
+                self.action_server.publish_feedback(
+                    RecipeRequestFeedback(percent_complete=percent_complete)
+                )
+                time.sleep(0.1)
+        except Exception:
+            self.request.clear()
+            self.log(f"Error completing dispense request.")
             self.action_server.set_aborted(RecipeRequestResult("Error"))
 
     def _get_recipe_by_id(self, recipe_id: int) -> dict:

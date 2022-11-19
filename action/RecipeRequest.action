@@ -1,8 +1,9 @@
 # Goal
 uint32 recipe_id  # specify which recipe to cook
+
 ---
 # Result
 string status  # OK or error message
 ---
 # Feedback
-uint32 percent_complete
+float32 percent_complete
