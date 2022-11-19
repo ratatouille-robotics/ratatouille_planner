@@ -22,12 +22,19 @@ from std_msgs.msg import Float64, String
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from tf.transformations import *
 
-from planner.planner import (DispensingDelay, DispensingRequest,
-                             DispensingStates, IngredientTypes,
-                             RatatouillePlanner, RecipeAction)
-from ratatouille_planner.msg import (RecipeRequestAction,
-                                     RecipeRequestFeedback,
-                                     RecipeRequestResult)
+from planner.planner import (
+    DispensingDelay,
+    DispensingRequest,
+    DispensingStates,
+    IngredientTypes,
+    RatatouillePlanner,
+    RecipeAction,
+)
+from ratatouille_planner.msg import (
+    RecipeRequestAction,
+    RecipeRequestFeedback,
+    RecipeRequestResult,
+)
 
 _ROS_RATE = 10.0
 _ROS_NODE_NAME = "ratatouille_planner"
@@ -100,7 +107,22 @@ class DispensingStateMachine(RatatouillePlanner):
             assert _selected_recipe is not None
             self._add_request_from_recipe(_selected_recipe)
             self.print_recipe(_selected_recipe)
-            self.action_server.set_succeeded()
+            # self.action_server.set_succeeded()
+            self.action_server.publish_feedback(
+                RecipeRequestFeedback(percent_complete=15)
+            )
+            percent_complete = 0
+            while (
+                not rospy.is_shutdown()
+                and not self.action_server.is_preempt_requested()
+                and percent_complete < 100
+            ):
+                percent_complete += 1
+                self.action_server.publish_feedback(
+                    RecipeRequestFeedback(percent_complete=percent_complete)
+                )
+                time.sleep(0.1)
+            self.action_server.set_succeeded(RecipeRequestResult("Done"))
         except Exception:
             print("Error: Missing ingredients/insufficient quantity in inventory.")
             self.action_server.set_aborted()
@@ -128,7 +150,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 _temp_id is None
                 or self.inventory.positions[_temp_id].quantity < _ingredient["quantity"]
             ):
-                raise # "Missing ingredients/insufficient quantity in inventory."
+                raise  # "Missing ingredients/insufficient quantity in inventory."
             request = DispensingRequest(
                 ingredient_id=_temp_id,
                 ingredient_name=self.inventory.positions[_temp_id].name,
@@ -234,7 +256,6 @@ class DispensingStateMachine(RatatouillePlanner):
 
             if self.error_message is None:
                 # print selected recipe
-
 
                 self.log(
                     f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
