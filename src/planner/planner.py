@@ -12,7 +12,7 @@ from motion.commander import RobotMoveGroup
 from ratatouille_pose_transforms.transforms import PoseTransforms
 from motion.utils import make_pose, offset_pose, offset_pose_relative
 
-_INVENTORY_FILE_PATH = "shelf_inventory.yaml"
+_INVENTORY_FILE_PATH = "inventory.yaml"
 _RECIPE_FILE_PATH = "recipes.yaml"
 _CALIBRATION_START_CONTAINER = 1
 _CALIBRATION_END_CONTAINER = 15

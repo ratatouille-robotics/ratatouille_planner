@@ -123,6 +123,7 @@ class DispensingStateMachine(RatatouillePlanner):
             _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
             assert _selected_recipe is not None
             self._add_request_from_recipe(_selected_recipe)
+            self.status_request = self.request[0].guid
             self.print_recipe(_selected_recipe)
         except Exception:
             self.request.clear()
@@ -138,14 +139,14 @@ class DispensingStateMachine(RatatouillePlanner):
                 not rospy.is_shutdown()
                 and not self.action_server.is_preempt_requested()
             ):
-                if len(self.request) == 0:
-                    self.action_server.set_succeeded(RecipeRequestResult("success"))
-                    return
                 percent_complete = 100.0 - (len(self.request) * 100.0 / _actions_count)
                 self.action_server.publish_feedback(
                     RecipeRequestFeedback(percent_complete=percent_complete)
                 )
-                time.sleep(0.1)
+                if len(self.request) == 0:
+                    self.action_server.set_succeeded(RecipeRequestResult("success"))
+                    return
+                rospy.sleep(1)
         except Exception:
             self.request.clear()
             self.log(f"Error completing dispense request.")
@@ -232,7 +233,7 @@ class DispensingStateMachine(RatatouillePlanner):
                     self.state = DispensingStates.DISPENSE
 
         elif self.state == DispensingStates.WAIT:
-            time.sleep(self.request[0].duration)
+            rospy.sleep(self.request[0].duration)
             self.request.popleft()
             self.status_request = self.request[0].guid
             self.state = DispensingStates.HOME
@@ -271,6 +272,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 try:
                     self._add_request_from_recipe(_selected_recipe)
                     assert len(self.request) > 0
+
                     self.status_request = self.request[
                         0
                     ].guid  # index of first ingredient to be dispenses
