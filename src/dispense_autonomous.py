@@ -29,6 +29,7 @@ from planner.planner import (
     DispensingStates,
     IngredientTypes,
     RatatouillePlanner,
+    Recipe,
     RecipeAction,
 )
 from ratatouille_planner.msg import (
@@ -130,6 +131,9 @@ class DispensingStateMachine(RatatouillePlanner):
             self.log(
                 f"Recipe Request [{goal}] from WebApp: Missing ingredients/insufficient quantity in inventory."
             )
+            rospy.sleep(
+                1.5
+            )  # prevent immediate callback being missed during React component update in webapp
             self.action_server.set_aborted(RecipeRequestResult("quantityerror"))
             return
         try:
@@ -154,43 +158,43 @@ class DispensingStateMachine(RatatouillePlanner):
 
     def _get_recipe_by_id(self, recipe_id: int) -> dict:
         for recipe in self.recipes:
-            if recipe["id"] == recipe_id:
+            if recipe.id == recipe_id:
                 return recipe
         return None
 
-    def _add_request_from_recipe(self, recipe: dict) -> List[DispensingRequest]:
-        assert recipe is not None and recipe["ingredients"] is not None
+    def _add_request_from_recipe(self, recipe: Recipe) -> List[DispensingRequest]:
+
+        assert recipe is not None and recipe.ingredients is not None
 
         # add dispensing requests for each ingredient in recipe
-        for _ingredient in recipe["ingredients"]:
+        for _ingredient in recipe.ingredients:
             # if delay step, add delay action to recipe
-            if _ingredient["name"] == "_wait":
-                self.request.append(DispensingDelay(_ingredient["quantity"]))
+            if _ingredient.name == "_wait":
+                self.request.append(DispensingDelay(_ingredient.quantity))
                 continue
-
             # check if ingredient is in inventory
             # check if sufficient quantity is in inventory
-            _temp_id = self.get_position_of_ingredient(_ingredient["name"])
+            _temp_id = self.get_position_of_ingredient(_ingredient.name)
             if (
                 _temp_id is None
-                or self.inventory.positions[_temp_id].quantity < _ingredient["quantity"]
+                or self.inventory[_temp_id].quantity < _ingredient.quantity
             ):
                 raise  # "Missing ingredients/insufficient quantity in inventory."
             request = DispensingRequest(
                 ingredient_id=_temp_id,
-                ingredient_name=self.inventory.positions[_temp_id].name,
-                quantity=_ingredient["quantity"],
-                ingredient_pose=self.inventory.positions[_temp_id].pose,
+                ingredient_name=self.inventory[_temp_id].name,
+                quantity=_ingredient.quantity,
+                ingredient_pose=self.inventory[_temp_id].pose,
             )
             self.request.append(request)
 
-    def print_recipe(self, recipe):
-        self.log(f"Selected recipe: {recipe['name']}".center(80))
+    def print_recipe(self, recipe: Recipe):
+        self.log(f"Selected recipe: {recipe.name}".center(80))
         self.log(f"{'-' * 40}".center(80))
-        for _ingredient in recipe["ingredients"]:
-            _temp_id = self.get_position_of_ingredient(_ingredient["name"])
+        for _ingredient in recipe.ingredients:
+            _temp_id = self.get_position_of_ingredient(_ingredient.name)
             self.log(
-                f"Ingredient ({_temp_id}) {_ingredient['name']}: {_ingredient['quantity']} grams".center(
+                f"Ingredient ({_temp_id}) {_ingredient.name}: {_ingredient.quantity} grams".center(
                     80
                 )
             )
@@ -295,7 +299,7 @@ class DispensingStateMachine(RatatouillePlanner):
 
             # Move to container position
             self.log("Moving to pick container from container position")
-            _temp = self.inventory.positions[self.request[0].ingredient_id].pose
+            _temp = self.inventory[self.request[0].ingredient_id].pose
             if not self._go_to_pose_cartesian_order(
                 goal=make_pose(
                     _temp[:3],
@@ -396,12 +400,10 @@ class DispensingStateMachine(RatatouillePlanner):
             )
 
             # update ingredient quantity in inventory
-            self.inventory.positions[
-                self.request[0].ingredient_id
-            ].quantity -= actual_dispensed_quantity
+            [self.request[0].ingredient_id].quantity -= actual_dispensed_quantity
             self.write_inventory()
             self.log(
-                f"Updated ingredient quantities : {self.inventory.positions[self.request[0].ingredient_id]}"
+                f"Updated ingredient quantities : {self.inventory[self.request[0].ingredient_id]}"
             )
 
             # Move to pre-dispense position
@@ -430,7 +432,7 @@ class DispensingStateMachine(RatatouillePlanner):
                 "Moving a little above expected view to avoid hitting shelf while replacing container)"
             )
 
-            _temp = self.inventory.positions[self.status_container].pose
+            _temp = self.inventory[self.status_container].pose
             # if recovering from error, use previous container id
             if not self._go_to_pose_cartesian_order(
                 offset_pose(

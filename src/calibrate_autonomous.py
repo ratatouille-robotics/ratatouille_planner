@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 
-import rospy
-import rospkg
 import argparse
-import yaml
 import os
-from tf.transformations import *
-from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
-from geometry_msgs.msg import Pose
-from std_msgs.msg import Float64, String
 import time
 
-from sensor_interface.msg import Weight
-from motion.commander import RobotMoveGroup
-from ratatouille_pose_transforms.transforms import PoseTransforms
-from motion.utils import make_pose, offset_pose, offset_pose_relative
+import rospkg
+import rospy
+import yaml
+from geometry_msgs.msg import Pose
 from ingredient_validation.srv import ValidateIngredient
+from motion.commander import RobotMoveGroup
+from motion.utils import make_pose, offset_pose, offset_pose_relative
+from ratatouille_pose_transforms.transforms import PoseTransforms
+from sensor_interface.msg import Weight
+from std_msgs.msg import Float64, String
+from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
+from tf.transformations import *
+
 from planner.planner import (
-    InventoryUpdateStates,
     IngredientTypes,
+    InventoryItem,
+    InventoryUpdateStates,
     RatatouillePlanner,
-    Container,
 )
 
 _ROS_RATE = 10.0
@@ -66,7 +67,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         disable_external_input: bool = False,
         bypass_picking: bool = False,
         bypass_sensing: bool = False,
-        bypass_id_service: bool = False
+        bypass_id_service: bool = False,
     ) -> None:
 
         super().__init__(config_dir_path, debug_mode, disable_gripper, verbose)
@@ -100,9 +101,9 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.ingredient_placed_position = None
 
     def __get_next_ingredient_position(self) -> int:
-        print(f"Calibration: {self.inventory.positions}")
-        for key in self.inventory.positions:
-            if self.inventory.positions[key] is None:
+        self.log(f"Calibration: {self.inventory}")
+        for key in self.inventory:
+            if self.inventory[key] is None:
                 return key
         return -1
 
@@ -135,7 +136,6 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.state = InventoryUpdateStates.STOP
             else:
                 self.ingredient_id = self.__get_next_ingredient_position()
-                print(f"Self ingredient id {self.ingredient_id}")
                 self.ingredient_position = self.known_poses["cartesian"]["positions"][
                     self.ingredient_id
                 ]
@@ -145,10 +145,11 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         elif self.state == InventoryUpdateStates.WRITE_INVENTORY_DATA:
 
             # update inventory of current position
-            self.inventory.positions[self.ingredient_id] = Container(
-                self.ingredient_name,
-                self.ingredient_quantity,
-                self.ingredient_placed_position,
+            self.inventory[self.ingredient_id] = InventoryItem(
+                position=self.ingredient_id,
+                name=self.ingredient_name,
+                quantity=self.ingredient_quantity,
+                pose=self.ingredient_placed_position,
             )
             self.write_inventory()
 
@@ -220,14 +221,14 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.error_state = self.state
                 # self.state = InventoryUpdateStates.LOG_ERROR
                 # return
-                self.ingredient_name = IngredientTypes.NO_CONTAINER
+                self.ingredient_name = IngredientTypes.NO_CONTAINER.__str__()
                 self.ingredient_quantity = 0
                 self.state = InventoryUpdateStates.WRITE_INVENTORY_DATA
 
         elif self.state == InventoryUpdateStates.LABEL_INGREDIENT:
             # Debugging code to bypass verfication
             if self.bypass_id_service:
-                self.ingredient_name = IngredientTypes.SALT
+                self.ingredient_name = IngredientTypes.SALT.__str__()
                 self.state = InventoryUpdateStates.PICK_CONTAINER
                 return
 
@@ -339,10 +340,11 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # TODO: verify if second correction required
             # temp_pose = self._correct_gripper_angle_tilt(temp_pose)
 
-            if not self._robot_go_to_pose_goal(pose=temp_pose,
+            if not self._robot_go_to_pose_goal(
+                pose=temp_pose,
                 acc_scaling=0.05,
                 velocity_scaling=0.5,
-                ):
+            ):
                 self.error_message = "Error moving to pose goal"
                 self.error_state = self.state
                 self.state = InventoryUpdateStates.LOG_ERROR
@@ -402,19 +404,22 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 return
 
             self._robot_open_gripper(wait=True)
-            #wait for weighing scale readings to settle
+            # wait for weighing scale readings to settle
             time.sleep(3)
-            #98g container weight
-            self.ingredient_quantity = self.weighing_scale_weight.weight - 98 - tared_weight
+            # 98g container weight
+            self.ingredient_quantity = (
+                self.weighing_scale_weight.weight - 98 - tared_weight
+            )
             # self.ingredient_quantity = 100
-            if not self.bypass_id_service:    
+            if not self.bypass_id_service:
                 rospy.wait_for_service("ingredient_validation")
                 try:
                     service_call = rospy.ServiceProxy(
                         "ingredient_validation", ValidateIngredient
                     )
                     response = service_call(
-                        mode="spectral", ingredient_name=self.ingredient_name
+                        mode="spectral",
+                        ingredient_name=self.ingredient_name
                         # TODO: remove hack for spectral camera run
                         # mode="spectral",
                         # ingredient_name="salt",
@@ -425,9 +430,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     print(f"Spectral camera response: {response}")
 
                 except rospy.ServiceException as e:
-                    self.error_message = (
-                        f"Ingredient detection service call (spectral) failed. Error: {e}"
-                    )
+                    self.error_message = f"Ingredient detection service call (spectral) failed. Error: {e}"
                     self.error_state = self.state
                     self.state = InventoryUpdateStates.LOG_ERROR
 
@@ -446,9 +449,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             self.log(f"Estimated weight: {self.ingredient_quantity}")
 
-            self._robot_go_to_joint_state(self.known_poses["joint"]["home"],
-            acc_scaling=0.3,
-            velocity_scaling=0.9,
+            self._robot_go_to_joint_state(
+                self.known_poses["joint"]["home"],
+                acc_scaling=0.3,
+                velocity_scaling=0.9,
             )
 
             self.state = InventoryUpdateStates.HOME
@@ -554,7 +558,9 @@ if __name__ == "__main__":
         "--bypass-picking", help="Bypass container picking", action="store_true"
     )
     parser.add_argument(
-        "--bypass-id-service", help="Bypass ingredient identification", action="store_true"
+        "--bypass-id-service",
+        help="Bypass ingredient identification",
+        action="store_true",
     )
     parser.add_argument("--bypass-sensing", help="Bypass sensing", action="store_true")
     parser.add_argument("--verbose", help="Enable verbose output", action="store_true")
@@ -592,7 +598,7 @@ if __name__ == "__main__":
         disable_external_input=args.disable_external_input,
         bypass_picking=args.bypass_picking,
         bypass_sensing=args.bypass_sensing,
-        bypass_id_service=args.bypass_id_service
+        bypass_id_service=args.bypass_id_service,
     )
 
     # reset robot position on start

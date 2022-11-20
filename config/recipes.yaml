@@ -1,114 +1,164 @@
-- id: 1
+- !recipe
+  id: 1
   name: Paneer_fried_rice
   ingredients:
-  - name: sunflower_oil
+  - !ingredient
+    name: sunflower_oil
     quantity: 10
-  - name: cumin_seeds
+  - !ingredient
+    name: cumin_seeds
     quantity: 5
-  - name: ginger_garlic_paste
-    quantity: 20  
-  - name: salt
+  - !ingredient
+    name: ginger_garlic_paste
+    quantity: 20
+  - !ingredient
+    name: salt
     quantity: 8
-  - name: onion
+  - !ingredient
+    name: onion
     quantity: 150
-  - name: _wait
+  - !ingredient
+    name: _wait
     quantity: 180
-  - name: paneer
+  - !ingredient
+    name: paneer
     quantity: 220
-  - name: _wait
+  - !ingredient
+    name: _wait
     quantity: 120
-  - name: kitchen_king
+  - !ingredient
+    name: kitchen_king
     quantity: 5
-  - name: turmeric
-    quantity: 2   
-  - name: water
-    quantity: 550   
-  - name: rice
-    quantity: 200 
-- id: 2
+  - !ingredient
+    name: turmeric
+    quantity: 2
+  - !ingredient
+    name: water
+    quantity: 550
+  - !ingredient
+    name: rice
+    quantity: 200
+- !recipe
+  id: 2
   name: Pasta
   ingredients:
-  - name: sunflower_oil
+  - !ingredient
+    name: sunflower_oil
     quantity: 15
-  - name: onion
-    quantity: 100    
-  - name: _wait
-    quantity: 120
-  - name: garlic_powder
-    quantity: 3
-  - name: salt
-    quantity: 5
-  - name: black_pepper
-    quantity: 1  
-  - name: oregano
-    quantity: 1
-  - name: marinara
-    quantity: 300
-  - name: _wait
-    quantity: 90
-  - name: bell_pepper
+  - !ingredient
+    name: onion
     quantity: 100
-  - name: cheese
-    quantity: 100 
-  - name: water
+  - !ingredient
+    name: _wait
+    quantity: 120
+  - !ingredient
+    name: garlic_powder
+    quantity: 3
+  - !ingredient
+    name: salt
+    quantity: 5
+  - !ingredient
+    name: black_pepper
+    quantity: 1
+  - !ingredient
+    name: oregano
+    quantity: 1
+  - !ingredient
+    name: marinara
+    quantity: 300
+  - !ingredient
+    name: _wait
+    quantity: 90
+  - !ingredient
+    name: bell_pepper
+    quantity: 100
+  - !ingredient
+    name: cheese
+    quantity: 100
+  - !ingredient
+    name: water
     quantity: 500
-  - name: _wait
+  - !ingredient
+    name: _wait
     quantity: 40
-  - name: pasta
-    quantity: 225 
-- id: 3
+  - !ingredient
+    name: pasta
+    quantity: 225
+- !recipe
+  id: 3
   name: sunflower_oil
   ingredients:
-  - name: sunflower_oil
-    quantity: 15  
-- id: 4
+  - !ingredient
+    name: sunflower_oil
+    quantity: 15
+- !recipe
+  id: 4
   name: onion
   ingredients:
-  - name: onion
-    quantity: 10  
-- id: 5
+  - !ingredient
+    name: onion
+    quantity: 10
+- !recipe
+  id: 5
   name: garlic_powder
   ingredients:
-  - name: garlic_powder
-    quantity: 3  
-- id: 6
+  - !ingredient
+    name: garlic_powder
+    quantity: 3
+- !recipe
+  id: 6
   name: marinara
   ingredients:
-  - name: marinara
-    quantity: 300  
-- id: 7
+  - !ingredient
+    name: marinara
+    quantity: 300
+- !recipe
+  id: 7
   name: salt
   ingredients:
-  - name: salt
-    quantity: 5  
-- id: 8
+  - !ingredient
+    name: salt
+    quantity: 5
+- !recipe
+  id: 8
   name: black_pepper
   ingredients:
-  - name: black_pepper
-    quantity: 1  
-- id: 9
+  - !ingredient
+    name: black_pepper
+    quantity: 1
+- !recipe
+  id: 9
   name: oregano
   ingredients:
-  - name: oregano
-    quantity: 3  
-- id: 10
+  - !ingredient
+    name: oregano
+    quantity: 3
+- !recipe
+  id: 10
   name: water
   ingredients:
-  - name: water
-    quantity: 500  
-- id: 11
+  - !ingredient
+    name: water
+    quantity: 500
+- !recipe
+  id: 11
   name: pasta
   ingredients:
-  - name: pasta
-    quantity: 225  
-- id: 12
+  - !ingredient
+    name: pasta
+    quantity: 225
+- !recipe
+  id: 12
   name: lentils
   ingredients:
-  - name: lentils
-    quantity: 10  
-- id: 13
+  - !ingredient
+    name: lentils
+    quantity: 10
+- !recipe
+  id: 13
   name: bell_pepper
   ingredients:
-  - name: bell_pepper
-    quantity: 100  
+  - !ingredient
+    name: bell_pepper
+    quantity: 100
 

@@ -1,4 +1,5 @@
-1: !container
+- !inventoryitem
+  position: 1
   name: sunflower_oil
   pose:
   - 0.31001905985093725
@@ -9,7 +10,8 @@
   - -2.1461774939937707e-05
   - 0.7210541537131597
   quantity: 796.3399755954742
-2: !container
+- !inventoryitem
+  position: 2
   name: cheese
   pose:
   - 0.16005134497364676
@@ -20,7 +22,8 @@
   - 0.00010276219697162215
   - 0.7210652369855093
   quantity: 222.56001472473145
-3: !container
+- !inventoryitem
+  position: 3
   name: oregano
   pose:
   - 0.009974450877550757
@@ -31,7 +34,8 @@
   - 1.0601513032851328e-06
   - 0.7210813141465098
   quantity: 146.14000415802002
-4: !container
+- !inventoryitem
+  position: 4
   name: pasta
   pose:
   - -0.14001599109651686
@@ -42,7 +46,8 @@
   - 0.00016226936362120312
   - 0.7210881717692028
   quantity: 268.11001467704773
-5: !container
+- !inventoryitem
+  position: 5
   name: water
   pose:
   - -0.28994448043533794
@@ -53,7 +58,8 @@
   - -1.2323778110737781e-05
   - 0.7211136074398508
   quantity: 690.8900098800659
-6: !container
+- !inventoryitem
+  position: 6
   name: marinara
   pose:
   - 0.31000151144471877
@@ -64,7 +70,8 @@
   - 6.190836425135284e-05
   - 0.721084559230951
   quantity: 668.6799974441528
-7: !container
+- !inventoryitem
+  position: 7
   name: onion
   pose:
   - 0.16001859280516242
@@ -75,15 +82,18 @@
   - 5.469541030980744e-05
   - 0.7211326061596055
   quantity: 288.71000611782074
-8: !container
+- !inventoryitem
+  position: 8
   name: no_container
   pose: null
   quantity: 0
-9: !container
+- !inventoryitem
+  position: 9
   name: no_container
   pose: null
   quantity: 0
-10: !container
+- !inventoryitem
+  position: 10
   name: bell_pepper
   pose:
   - -0.2898102811192579
@@ -94,11 +104,13 @@
   - -0.00011686593568748421
   - 0.721125263171515
   quantity: 219.45999264717102
-11: !container
+- !inventoryitem
+  position: 11
   name: no_container
   pose: null
   quantity: 0
-12: !container
+- !inventoryitem
+  position: 12
   name: salt
   pose:
   - 0.16004754013521505
@@ -109,7 +121,8 @@
   - 6.25881126020838e-05
   - 0.7210415045910935
   quantity: 1142.3400292396545
-13: !container
+- !inventoryitem
+  position: 13
   name: black_pepper
   pose:
   - 0.0100090310832213
@@ -120,7 +133,8 @@
   - 9.013061452454278e-05
   - 0.7210872250616449
   quantity: 388.0099849700928
-14: !container
+- !inventoryitem
+  position: 14
   name: garlic_powder
   pose:
   - -0.13983855372731172
@@ -131,7 +145,8 @@
   - -6.356777544441431e-05
   - 0.7211479964106583
   quantity: 324.0
-15: !container
+- !inventoryitem
+  position: 15
   name: no_container
   pose: null
   quantity: 0
