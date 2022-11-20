@@ -129,7 +129,7 @@ class DispensingStateMachine(RatatouillePlanner):
             self.log(
                 f"Recipe Request [{goal}] from WebApp: Missing ingredients/insufficient quantity in inventory."
             )
-            self.action_server.set_aborted(RecipeRequestResult("Error"))
+            self.action_server.set_aborted(RecipeRequestResult("quantityerror"))
             return
         try:
             _actions_count = len(self.request)
@@ -149,7 +149,7 @@ class DispensingStateMachine(RatatouillePlanner):
         except Exception:
             self.request.clear()
             self.log(f"Error completing dispense request.")
-            self.action_server.set_aborted(RecipeRequestResult("Error"))
+            self.action_server.set_aborted(RecipeRequestResult("error"))
 
     def _get_recipe_by_id(self, recipe_id: int) -> dict:
         for recipe in self.recipes:
