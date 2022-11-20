@@ -53,8 +53,11 @@
 
     <!-- Ingredient identification -->
     <node pkg="ingredient_validation" type="validate_ingredient_service.py" name="ingredient_validation" />
+    <node pkg="ingredient_validation" type="visualize_ingredient_validation.py" name="ingredient_validation_visualization" />
   </group>
+
   <group unless="$(arg calibrate)">
     <include file="$(find rosbridge_server)/launch/rosbridge_websocket.launch" />
   </group>
+
 </launch>

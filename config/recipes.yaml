@@ -65,7 +65,7 @@
   name: onion
   ingredients:
   - name: onion
-    quantity: 100  
+    quantity: 10  
 - id: 5
   name: garlic_powder
   ingredients:
@@ -105,7 +105,7 @@
   name: lentils
   ingredients:
   - name: lentils
-    quantity: 50  
+    quantity: 10  
 - id: 13
   name: bell_pepper
   ingredients:
