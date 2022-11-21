@@ -285,7 +285,7 @@ class RatatouillePlanner(ABC):
 
     def write_inventory(self) -> None:
         # skip writing null values
-        _inventory = [x for x in self.inventory.items() if x]
+        _inventory = [x for x in self.inventory.values() if x]
         with open(
             os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w"
         ) as _temp:
