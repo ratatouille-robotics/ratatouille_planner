@@ -410,6 +410,10 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self.ingredient_quantity = (
                 self.weighing_scale_weight.weight - 98 - tared_weight
             )
+
+            # close gripper before spectral service call to ensure good contact against sensor
+            self._robot_close_gripper(wait=True)
+
             # self.ingredient_quantity = 100
             if not self.bypass_id_service:
                 rospy.wait_for_service("ingredient_validation")
@@ -434,7 +438,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     self.error_state = self.state
                     self.state = InventoryUpdateStates.LOG_ERROR
 
-            self._robot_close_gripper(wait=True)
+            # self._robot_close_gripper(wait=True)
 
             self.log("Moving to pre-sense position")
             if not self._robot_go_to_joint_state(
