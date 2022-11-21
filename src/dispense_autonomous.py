@@ -148,6 +148,8 @@ class DispensingStateMachine(RatatouillePlanner):
                     RecipeRequestFeedback(percent_complete=percent_complete)
                 )
                 if len(self.request) == 0:
+                    rospy.sleep(1.5) # prevent immediate callback for success
+                    # being missed during feedback React component update in webapp
                     self.action_server.set_succeeded(RecipeRequestResult("success"))
                     return
                 rospy.sleep(1)
