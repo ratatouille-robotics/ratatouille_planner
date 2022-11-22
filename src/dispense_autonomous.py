@@ -402,7 +402,7 @@ class DispensingStateMachine(RatatouillePlanner):
             )
 
             # update ingredient quantity in inventory
-            [self.request[0].ingredient_id].quantity -= actual_dispensed_quantity
+            self.inventory[self.request[0].ingredient_id].quantity -= actual_dispensed_quantity
             self.write_inventory()
             self.log(
                 f"Updated ingredient quantities : {self.inventory[self.request[0].ingredient_id]}"
