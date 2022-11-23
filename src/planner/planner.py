@@ -290,7 +290,6 @@ class RatatouillePlanner(ABC):
             os.path.join(self.config_dir_path, _INVENTORY_FILE_PATH), "w"
         ) as _temp:
             yaml.dump(_inventory, _temp, Dumper=get_yaml_dumper())
-            self.log(f"Inventory updated on disk: {_inventory}")
 
     def print_current_state_banner(self):
         print("\n" + "-" * 80)
@@ -405,6 +404,13 @@ class RatatouillePlanner(ABC):
         pose.orientation.z = _temp_quaternion[2]
         pose.orientation.w = _temp_quaternion[3]
         return pose
+
+    def get_recipe_by_id(self, recipe_id: int) -> dict:
+        for recipe in self.recipes:
+            if recipe.id == recipe_id:
+                print(recipe)
+                return recipe
+        return None
 
 
 class RecipeAction(ABC):

@@ -121,7 +121,7 @@ class DispensingStateMachine(RatatouillePlanner):
         # read from goal and add to self.request
         self.log(f"Received request for recipe ID: [{goal}]")
         try:
-            _selected_recipe = self._get_recipe_by_id(goal.recipe_id)
+            _selected_recipe = self.get_recipe_by_id(goal.recipe_id)
             assert _selected_recipe is not None
             self._add_request_from_recipe(_selected_recipe)
             self.status_request = self.request[0].guid
@@ -148,7 +148,7 @@ class DispensingStateMachine(RatatouillePlanner):
                     RecipeRequestFeedback(percent_complete=percent_complete)
                 )
                 if len(self.request) == 0:
-                    rospy.sleep(1.5) # prevent immediate callback for success
+                    rospy.sleep(1.5)  # prevent immediate callback for success
                     # being missed during feedback React component update in webapp
                     self.action_server.set_succeeded(RecipeRequestResult("success"))
                     return
@@ -157,12 +157,6 @@ class DispensingStateMachine(RatatouillePlanner):
             self.request.clear()
             self.log(f"Error completing dispense request.")
             self.action_server.set_aborted(RecipeRequestResult("error"))
-
-    def _get_recipe_by_id(self, recipe_id: int) -> dict:
-        for recipe in self.recipes:
-            if recipe.id == recipe_id:
-                return recipe
-        return None
 
     def _add_request_from_recipe(self, recipe: Recipe) -> List[DispensingRequest]:
 
@@ -264,37 +258,33 @@ class DispensingStateMachine(RatatouillePlanner):
 
                 print(" MENU".center(80, "-"))
                 for recipe in self.recipes:
-                    print(f"Recipe ID {recipe['id']}: {recipe['name']}".center(80))
+                    print(f"Recipe ID {recipe.id}: {recipe.name}".center(80))
                 print("-" * 80)
 
                 # read and parse user input
                 try:
                     _selected_recipe_id = int(input("Enter recipe ID: "))
-                    _selected_recipe = self._get_recipe_by_id(_selected_recipe_id)
+                    _selected_recipe = self.get_recipe_by_id(_selected_recipe_id)
                     assert _selected_recipe is not None
+                    self.print_recipe(_selected_recipe)
                 except:
                     self.error_message = "Unable to parse user input."
+                    self.state = DispensingStates.LOG_ERROR
+                    return
 
                 try:
                     self._add_request_from_recipe(_selected_recipe)
                     assert len(self.request) > 0
-
-                    self.status_request = self.request[
-                        0
-                    ].guid  # index of first ingredient to be dispenses
-                    self.print_recipe(_selected_recipe)
+                    # assign active request to GUID of first ingredient in recipe
+                    self.status_request = self.request[0].guid
+                    self.log(
+                        f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
+                    )
+                    self.state = DispensingStates.HOME
                 except:
                     self.error_message = "Missing ingredient/ insufficient quantity - cannot prepare recipe."
-
-            if self.error_message is None:
-                # print selected recipe
-
-                self.log(
-                    f"Picking [{self.request[0].quantity} grams] of [{self.request[0].ingredient_name}]"
-                )
-                self.state = DispensingStates.HOME
-            else:
-                self.state = DispensingStates.LOG_ERROR
+                    self.state = DispensingStates.LOG_ERROR
+                    return
 
         elif self.state == DispensingStates.PICK_CONTAINER:
             self._robot_open_gripper(wait=False)
@@ -402,7 +392,9 @@ class DispensingStateMachine(RatatouillePlanner):
             )
 
             # update ingredient quantity in inventory
-            self.inventory[self.request[0].ingredient_id].quantity -= actual_dispensed_quantity
+            self.inventory[
+                self.request[0].ingredient_id
+            ].quantity -= actual_dispensed_quantity
             self.write_inventory()
             self.log(
                 f"Updated ingredient quantities : {self.inventory[self.request[0].ingredient_id]}"
