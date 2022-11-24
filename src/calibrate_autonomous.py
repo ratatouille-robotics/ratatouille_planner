@@ -16,6 +16,7 @@ from sensor_interface.msg import Weight
 from std_msgs.msg import Float64, String
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from tf.transformations import *
+from visualization_msgs.msg import Marker
 
 from planner.planner import (
     IngredientTypes,
@@ -32,6 +33,7 @@ _MARKER_DETECTION_TIMEOUT_SECONDS = 2
 _OFFSET_CONTAINER_VIEW = [0.00, 0.19, -0.07]
 _CONTAINER_LIFT_OFFSET = 0.015
 _CONTAINER_SHELF_BACKOUT_OFFSET = 0.20
+_SENSING_STATION_WSCALE_TOPIC = "/sensing_station/weighing_scale"
 
 # ASSUMPTIONS
 # - all markers should be at correct positions (eg. marker 1 at position 1)
@@ -83,9 +85,11 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
         self.pose_transformer = PoseTransforms()
         self.weight_subscriber = rospy.Subscriber(
-            "/sensing_station/weighing_scale", Weight, callback=self.__weight_callback
+            _SENSING_STATION_WSCALE_TOPIC, Weight, callback=self.__weight_callback
         )
-
+        self.log("Waiting to receive sensing station weighing scale data.")
+        rospy.wait_for_message(_SENSING_STATION_WSCALE_TOPIC, Weight)
+        self.marker_pub = rospy.Publisher("/visualization_marker", Marker, queue_size = 2)
         # initialize state variables
         self.state = state
         self.has_container = False
@@ -101,46 +105,50 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
         self.ingredient_placed_position = None
 
     def __get_next_ingredient_position(self) -> int:
-        self.log(f"Calibration: {self.inventory}")
         for key in self.inventory:
             if self.inventory[key] is None:
                 return key
         return -1
 
     def __weight_callback(self, data: float) -> None:
-        self.weighing_scale_weight = data
+        self.weighing_scale_weight = data.weight
 
     def run(self) -> None:
         self.print_current_state_banner()
 
         if self.state == InventoryUpdateStates.HOME:
-            self.log(f"Moving to home")
-            if not self._go_to_pose_cartesian_order(
-                make_pose(
-                    self.known_poses["cartesian"]["home"][:3],
-                    self.known_poses["cartesian"]["home"][3:],
-                ),
-                acceleration_scaling_factor=0.3,
-                velocity_scaling=0.9,
-                reverse=True,
-            ):
-                self.error_message = "Unable to move to joint state"
-                self.error_state = self.state
-                self.state = InventoryUpdateStates.LOG_ERROR
-                return
-
+            _next_state = None
             if self.has_container:
-                self.state = InventoryUpdateStates.REPLACE_CONTAINER
+                _next_state = InventoryUpdateStates.REPLACE_CONTAINER
             elif self.__get_next_ingredient_position() == -1:
                 # calibration complete, all shelf positions have been populated
-                self.state = InventoryUpdateStates.STOP
+                _next_state = InventoryUpdateStates.STOP
             else:
                 self.ingredient_id = self.__get_next_ingredient_position()
                 self.ingredient_position = self.known_poses["cartesian"]["positions"][
                     self.ingredient_id
                 ]
                 # go to next position
-                self.state = InventoryUpdateStates.VISIT_NEXT_CONTAINER
+                _next_state = InventoryUpdateStates.VISIT_NEXT_CONTAINER
+
+            # skip going to home if next state is visiting next container
+            if _next_state != InventoryUpdateStates.VISIT_NEXT_CONTAINER:
+                self.log(f"Moving to home")
+                if not self._go_to_pose_cartesian_order(
+                    make_pose(
+                        self.known_poses["cartesian"]["home"][:3],
+                        self.known_poses["cartesian"]["home"][3:],
+                    ),
+                    acceleration_scaling_factor=0.3,
+                    velocity_scaling=0.9,
+                    reverse=True,
+                ):
+                    self.error_message = "Unable to move to joint state"
+                    self.error_state = self.state
+                    self.state = InventoryUpdateStates.LOG_ERROR
+                    return
+
+            self.state = _next_state
 
         elif self.state == InventoryUpdateStates.WRITE_INVENTORY_DATA:
 
@@ -152,6 +160,62 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 pose=self.ingredient_placed_position,
             )
             self.write_inventory()
+            if self.ingredient_placed_position is not None:
+                marker = Marker()
+                marker.header.frame_id = "base_link"
+                marker.header.stamp = rospy.Time.now()
+
+                # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
+                marker.type = 1
+                marker.id = self.ingredient_id
+
+                # Set the scale of the marker
+                marker.scale.x = 0.10
+                marker.scale.y = 0.15
+                marker.scale.z = 0.15
+
+                # Set the color
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+                marker.color.a = 1.0
+                
+                # Set the pose of the marker
+                marker.pose.position.x = self.ingredient_placed_position[0]
+                marker.pose.position.y = self.ingredient_placed_position[1] - marker.scale.y
+                marker.pose.position.z = self.ingredient_placed_position[2]
+                marker.pose.orientation.x = self.ingredient_placed_position[3]
+                marker.pose.orientation.y = self.ingredient_placed_position[4]
+                marker.pose.orientation.z = self.ingredient_placed_position[5]
+                marker.pose.orientation.w = self.ingredient_placed_position[6]
+                self.marker_pub.publish(marker) 
+
+                text_marker = Marker()
+                text_marker.header.frame_id = "base_link"
+                text_marker.header.stamp = rospy.Time.now()
+
+                # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
+                text_marker.type = 9
+                text_marker.id = 100 + self.ingredient_id
+
+                # Set the scale of the text_marker
+                text_marker.scale.z = 0.03
+
+                # Set the color
+                text_marker.color.r = 0.0
+                text_marker.color.g = 0.0
+                text_marker.color.b = 0.0
+                text_marker.color.a = 1.0
+                text_marker.text = self.ingredient_name + "\n" + str(self.ingredient_quantity) + "g"
+                # Set the pose of the text_marker
+                text_marker.pose.position.x = self.ingredient_placed_position[0]
+                text_marker.pose.position.y = self.ingredient_placed_position[1] - text_marker.scale.y
+                text_marker.pose.position.z = self.ingredient_placed_position[2] + text_marker.scale.z
+                text_marker.pose.orientation.x = self.ingredient_placed_position[3]
+                text_marker.pose.orientation.y = self.ingredient_placed_position[4]
+                text_marker.pose.orientation.z = self.ingredient_placed_position[5]
+                text_marker.pose.orientation.w = self.ingredient_placed_position[6]
+                self.marker_pub.publish(text_marker) 
 
             # reset state variables
             self.ingredient_id = None
@@ -160,6 +224,14 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             self.ingredient_placed_position = None
 
             self.state = InventoryUpdateStates.HOME
+
+            # # go directly to next container instead of going home
+            # self.ingredient_id = self.__get_next_ingredient_position()
+            # self.ingredient_position = self.known_poses["cartesian"]["positions"][
+            #     self.ingredient_id
+            # ]
+            # # go to next position
+            # self.state = InventoryUpdateStates.VISIT_NEXT_CONTAINER
 
         elif self.state == InventoryUpdateStates.VISIT_NEXT_CONTAINER:
             # Move to ingredient view position
@@ -173,7 +245,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     ),
                     _OFFSET_CONTAINER_VIEW,
                 ),
-                acceleration_scaling_factor=0.3,
+                acceleration_scaling_factor=0.1,
                 velocity_scaling=0.9,
             ):
                 self.error_message = "Error moving to pose goal"
@@ -376,7 +448,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 self.state = InventoryUpdateStates.HOME
                 return
             # end bypass sensing
-            tared_weight = self.weighing_scale_weight.weight
+            tared_weight = self.weighing_scale_weight
             self.log("Moving to pre-sense position")
             if not self._robot_go_to_joint_state(
                 self.known_poses["joint"]["pre_sense"],
@@ -407,9 +479,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
             # wait for weighing scale readings to settle
             time.sleep(3)
             # 98g container weight
-            self.ingredient_quantity = (
-                self.weighing_scale_weight.weight - 98 - tared_weight
-            )
+            self.ingredient_quantity = self.weighing_scale_weight - 98 - tared_weight
 
             # close gripper before spectral service call to ensure good contact against sensor
             self._robot_close_gripper(wait=True)
@@ -524,6 +594,20 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
 
             # Remove container once replaced
             self.has_container = False
+
+            # go back out after placing container to not hit next container
+            if not self._go_to_pose_cartesian_order(
+                offset_pose(
+                    self.robot_mg.get_current_pose(),
+                    [0, _CONTAINER_SHELF_BACKOUT_OFFSET, 0],
+                ),
+                acceleration_scaling_factor=0.3,
+                velocity_scaling=0.9,
+            ):
+                self.error_message = "Error moving to pose goal (backing out of shelf)"
+                self.error_state = self.state
+                self.state = InventoryUpdateStates.LOG_ERROR
+                return
 
             self.state = InventoryUpdateStates.WRITE_INVENTORY_DATA
 

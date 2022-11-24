@@ -15,23 +15,23 @@
     name: salt
     quantity: 8
   - !ingredient
-    name: onion
-    quantity: 150
-  - !ingredient
-    name: _wait
-    quantity: 180
-  - !ingredient
-    name: paneer
-    quantity: 220
-  - !ingredient
-    name: _wait
-    quantity: 120
-  - !ingredient
     name: kitchen_king
     quantity: 5
   - !ingredient
     name: turmeric
     quantity: 2
+  - !ingredient
+    name: onion
+    quantity: 150
+  - !ingredient
+    name: _wait
+    quantity: 120
+  - !ingredient
+    name: paneer
+    quantity: 220
+  - !ingredient
+    name: _wait
+    quantity: 90
   - !ingredient
     name: water
     quantity: 550
@@ -133,34 +133,6 @@
   - !ingredient
     name: oregano
     quantity: 3
-- !recipe
-  id: 10
-  name: water
-  ingredients:
-  - !ingredient
-    name: water
-    quantity: 500
-- !recipe
-  id: 11
-  name: pasta
-  ingredients:
-  - !ingredient
-    name: pasta
-    quantity: 225
-- !recipe
-  id: 12
-  name: lentils
-  ingredients:
-  - !ingredient
-    name: lentils
-    quantity: 10
-- !recipe
-  id: 13
-  name: bell_pepper
-  ingredients:
-  - !ingredient
-    name: bell_pepper
-    quantity: 100
 - !recipe
   id: 21
   name: Pasta
@@ -333,3 +305,43 @@
   - !ingredient
     name: pasta
     quantity: 225
+
+  id: 12
+  name: Paneer_fried_rice
+  ingredients:
+  - !ingredient
+    name: sunflower_oil
+    quantity: 10
+  - !ingredient
+    name: cumin_seeds
+    quantity: 5
+  - !ingredient
+    name: ginger_garlic_paste
+    quantity: 20
+  - !ingredient
+    name: salt
+    quantity: 8
+  - !ingredient
+    name: kitchen_king
+    quantity: 5
+  - !ingredient
+    name: turmeric
+    quantity: 2
+  - !ingredient
+    name: onion
+    quantity: 150
+  - !ingredient
+    name: _wait
+    quantity: 120
+  - !ingredient
+    name: paneer
+    quantity: 220
+  - !ingredient
+    name: _wait
+    quantity: 90
+  - !ingredient
+    name: water
+    quantity: 550
+  - !ingredient
+    name: rice
+    quantity: 200
