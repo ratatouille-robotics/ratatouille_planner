@@ -4,13 +4,19 @@
   ingredients:
   - !ingredient
     name: sunflower_oil
-    quantity: 10
+    quantity: 15
   - !ingredient
     name: cumin_seeds
     quantity: 5
   - !ingredient
     name: ginger_garlic_paste
-    quantity: 20
+    quantity: 25
+  - !ingredient
+    name: onion
+    quantity: 150   
+  - !ingredient
+    name: _wait
+    quantity: 120 
   - !ingredient
     name: salt
     quantity: 8
@@ -19,13 +25,7 @@
     quantity: 5
   - !ingredient
     name: turmeric
-    quantity: 2
-  - !ingredient
-    name: onion
-    quantity: 150
-  - !ingredient
-    name: _wait
-    quantity: 120
+    quantity: 1.5
   - !ingredient
     name: paneer
     quantity: 220
