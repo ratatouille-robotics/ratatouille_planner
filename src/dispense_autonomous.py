@@ -252,6 +252,7 @@ class DispensingStateMachine(RatatouillePlanner):
                         self.error_message = "No user input received"
                         self.state = DispensingStates.LOG_ERROR
                         return
+                self.state = DispensingStates.HOME
 
             else:
                 # print menu and read input from command line
