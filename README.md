@@ -130,7 +130,7 @@ flowchart
 ### Inventory update
 Pre-requisite services:
 ``` sh
-roslaunch ur_motion ur5e_bringup.launch robot_ip:=10.0.0.2
+roslaunch ur_motion ur5e_bringup_ratatouille.launch robot_ip:=10.0.0.2
 
 roslaunch ratatouille_planner ratatouille-bringup.launch
 ```
@@ -160,6 +160,10 @@ Pre-requisite services:
 roslaunch ur_motion ur5e_bringup_ratatouille.launch robot_ip:=10.0.0.2
 
 roslaunch ratatouille_planner ratatouille-bringup.launch calibrate:=false
+
+roscd
+cd ../src/ratatouille_webapp
+yarn start
 ```
 Usage:
 ``` sh
