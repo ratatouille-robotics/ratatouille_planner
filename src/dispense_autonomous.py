@@ -440,7 +440,7 @@ class DispensingStateMachine(RatatouillePlanner):
             text_marker.color.g = 0.0
             text_marker.color.b = 0.0
             text_marker.color.a = 1.0
-            text_marker.text = f"Requested {self.request[0].quantity:.2f}g)"+"\n" + f"Dispensed {actual_dispensed_quantity:.2f}g"
+            text_marker.text = f"Requested:{self.request[0].quantity:.2f}g"+"\n" + f"Dispensed:{actual_dispensed_quantity:.2f}g"
             # Set the pose of the text_marker
             text_marker.pose.position.x = self.inventory[self.request[0].ingredient_id].pose[0]
             text_marker.pose.position.y = self.inventory[self.request[0].ingredient_id].pose[1] 
