@@ -93,11 +93,11 @@
     quantity: 15
 - !recipe
   id: 4
-  name: onion
+  name: rice
   ingredients:
   - !ingredient
-    name: onion
-    quantity: 10
+    name: rice
+    quantity: 200
 - !recipe
   id: 5
   name: cumin_seeds
@@ -345,6 +345,7 @@
   - !ingredient
     name: rice
     quantity: 200
+- !recipe
   id: 11
   name: Paneer_fried_rice
   ingredients:
@@ -380,7 +381,7 @@
     quantity: 90
   - !ingredient
     name: water
-    quantity: 1100
+    quantity: 950
   - !ingredient
     name: rice
     quantity: 400
