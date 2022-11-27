@@ -209,7 +209,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 text_marker.text = self.ingredient_name + "\n" + str(int(self.ingredient_quantity)) + "g"
                 # Set the pose of the text_marker
                 text_marker.pose.position.x = self.ingredient_placed_position[0]
-                text_marker.pose.position.y = self.ingredient_placed_position[1] - text_marker.scale.y
+                text_marker.pose.position.y = self.ingredient_placed_position[1]
                 text_marker.pose.position.z = self.ingredient_placed_position[2] + text_marker.scale.z
                 text_marker.pose.orientation.x = self.ingredient_placed_position[3]
                 text_marker.pose.orientation.y = self.ingredient_placed_position[4]

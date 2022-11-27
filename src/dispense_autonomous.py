@@ -22,6 +22,8 @@ from sensor_interface.msg import UserInput
 from std_msgs.msg import Float64, String
 from tf2_geometry_msgs.tf2_geometry_msgs import PoseStamped
 from tf.transformations import *
+from visualization_msgs.msg import Marker
+
 
 from planner.planner import (
     DispensingDelay,
@@ -115,6 +117,7 @@ class DispensingStateMachine(RatatouillePlanner):
         self.status_container = -1
         self.status_request = -1
         self.request = deque()
+        self.marker_pub = rospy.Publisher("/visualization_marker", Marker, queue_size = 2)
         self.error_message = None
 
     def _action_server_callback(self, goal):
@@ -391,6 +394,62 @@ class DispensingStateMachine(RatatouillePlanner):
             self.log(
                 f"Dispensed [{actual_dispensed_quantity}] grams with error of [{dispense_error}] (requested [{self.request[0].quantity}] grams)"
             )
+            
+            marker = Marker()
+            marker.header.frame_id = "base_link"
+            marker.header.stamp = rospy.Time.now()
+
+            # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
+            marker.type = 1
+            marker.id = self.request[0].ingredient_id
+
+            # Set the scale of the marker
+            marker.scale.x = 0.10
+            marker.scale.y = 0.15
+            marker.scale.z = 0.15
+
+            # Set the color
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+            
+            # Set the pose of the marker
+            marker.pose.position.x = self.inventory[self.request[0].ingredient_id].pose[0]
+            marker.pose.position.y = self.inventory[self.request[0].ingredient_id].pose[1] - marker.scale.y
+            marker.pose.position.z = self.inventory[self.request[0].ingredient_id].pose[2]
+            marker.pose.orientation.x = self.inventory[self.request[0].ingredient_id].pose[3]
+            marker.pose.orientation.y = self.inventory[self.request[0].ingredient_id].pose[4]
+            marker.pose.orientation.z = self.inventory[self.request[0].ingredient_id].pose[5]
+            marker.pose.orientation.w = self.inventory[self.request[0].ingredient_id].pose[6]
+            self.marker_pub.publish(marker) 
+
+            text_marker = Marker()
+            text_marker.header.frame_id = "base_link"
+            text_marker.header.stamp = rospy.Time.now()
+
+            # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
+            text_marker.type = 9
+            text_marker.id = 100 + self.request[0].ingredient_id
+
+            # Set the scale of the text_marker
+            text_marker.scale.z = 0.03
+
+            # Set the color
+            text_marker.color.r = 0.0
+            text_marker.color.g = 0.0
+            text_marker.color.b = 0.0
+            text_marker.color.a = 1.0
+            text_marker.text = f"Requested [{self.request[0].quantity}] g)"+"\n" + f"Dispensed [{actual_dispensed_quantity}]g"
+            # Set the pose of the text_marker
+            text_marker.pose.position.x = self.inventory[self.request[0].ingredient_id].pose[0]
+            text_marker.pose.position.y = self.inventory[self.request[0].ingredient_id].pose[1] 
+            text_marker.pose.position.z = self.inventory[self.request[0].ingredient_id].pose[2] + text_marker.scale.z
+            text_marker.pose.orientation.x = self.inventory[self.request[0].ingredient_id].pose[3]
+            text_marker.pose.orientation.y = self.inventory[self.request[0].ingredient_id].pose[4]
+            text_marker.pose.orientation.z = self.inventory[self.request[0].ingredient_id].pose[5]
+            text_marker.pose.orientation.w = self.inventory[self.request[0].ingredient_id].pose[6]
+            self.marker_pub.publish(text_marker) 
 
             # update ingredient quantity in inventory
             self.inventory[
