@@ -100,11 +100,11 @@
     quantity: 10
 - !recipe
   id: 5
-  name: garlic_powder
+  name: cumin_seeds
   ingredients:
   - !ingredient
-    name: garlic_powder
-    quantity: 3
+    name: cumin_seeds
+    quantity: 20
 - !recipe
   id: 6
   name: marinara
