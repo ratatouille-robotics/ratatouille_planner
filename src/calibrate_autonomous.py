@@ -311,7 +311,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                 service_call = rospy.ServiceProxy(
                     "ingredient_validation", ValidateIngredient
                 )
-                response = service_call(mode="rgb")
+                response = service_call(mode="rgb", id=self.ingredient_id)
                 print(f"Service Response: {response.found_ingredient}")
 
             except rospy.ServiceException as e:
@@ -493,6 +493,7 @@ class InventoryUpdateStateMachine(RatatouillePlanner):
                     )
                     response = service_call(
                         mode="spectral",
+                        id=self.ingredient_id,
                         ingredient_name=self.ingredient_name
                         # TODO: remove hack for spectral camera run
                         # mode="spectral",
