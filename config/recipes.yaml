@@ -86,11 +86,11 @@
     quantity: 225
 - !recipe
   id: 3
-  name: sunflower_oil
+  name: kitchen_king
   ingredients:
   - !ingredient
-    name: sunflower_oil
-    quantity: 15
+    name: kitchen_king
+    quantity: 10
 - !recipe
   id: 4
   name: rice
@@ -351,37 +351,38 @@
   ingredients:
   - !ingredient
     name: sunflower_oil
-    quantity: 20
+    quantity: 10
   - !ingredient
     name: cumin_seeds
-    quantity: 10
+    quantity: 5
   - !ingredient
     name: ginger_garlic_paste
-    quantity: 40
+    quantity: 25
   - !ingredient
     name: onion
-    quantity: 300
+    quantity: 150   
   - !ingredient
     name: _wait
-    quantity: 120
+    quantity: 120 
   - !ingredient
     name: salt
-    quantity: 16
+    quantity: 8
   - !ingredient
     name: kitchen_king
-    quantity: 10
+    quantity: 5
   - !ingredient
     name: turmeric
-    quantity: 3
+    quantity: 1.5
   - !ingredient
     name: paneer
-    quantity: 440
+    quantity: 220
   - !ingredient
     name: _wait
     quantity: 90
   - !ingredient
     name: water
-    quantity: 950
+    quantity: 550
   - !ingredient
     name: rice
-    quantity: 400
+    quantity: 200
+    
